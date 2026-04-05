@@ -128,7 +128,8 @@ CHOROPLETH_GEO = dict(
     lataxis_range=[-60, 90],
 )
 
-RESULTS_DIR = 'Results'
+_HERE = os.path.dirname(os.path.abspath(__file__))
+RESULTS_DIR = os.path.join(_HERE, 'Results')
 
 # ---------------------------------------------------------------------------
 # Data discovery and loading (cached)
@@ -633,7 +634,7 @@ def fig_port_source_map(df: pd.DataFrame, metric: str, port_label: str,
 
 @st.cache_data(show_spinner=False)
 def load_security_data() -> pd.DataFrame:
-    path = 'Data/Security.csv'
+    path = os.path.join(_HERE, 'Data', 'Security.csv')
     if not os.path.exists(path):
         return pd.DataFrame()
     return pd.read_csv(path)
@@ -641,7 +642,7 @@ def load_security_data() -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def load_water_stress_data() -> pd.DataFrame:
-    path = 'Data/aqueduct-30-country-rankings.xlsx'
+    path = os.path.join(_HERE, 'Data', 'aqueduct-30-country-rankings.xlsx')
     if not os.path.exists(path):
         return pd.DataFrame()
     df = pd.read_excel(path, sheet_name='results country')
@@ -1062,7 +1063,7 @@ def fig_strategic_source_map(
 @st.cache_data(show_spinner='Loading capacity data…')
 def _load_caps_df() -> pd.DataFrame:
     """Load combined_caps_by_year.csv, returning empty DataFrame if missing."""
-    path = 'Data/combined_caps_by_year.csv'
+    path = os.path.join(_HERE, 'Data', 'combined_caps_by_year.csv')
     if not os.path.exists(path):
         return pd.DataFrame()
     df = pd.read_csv(path)
