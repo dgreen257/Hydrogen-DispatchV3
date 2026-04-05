@@ -207,14 +207,48 @@ def load_corridors(year: int, scenario: str) -> dict[str, pd.DataFrame]:
 # Dynamic capacity recomputation (cached by demand + year)
 # ---------------------------------------------------------------------------
 
+def _apply_capacity_limits(df: pd.DataFrame, h2_demand: float,
+                           year: int, n_global: int = None,
+                           caps: dict = None) -> pd.DataFrame:
+    if caps is None:
+        caps = _get_caps_for_year(year)
+
+    df = df.copy()
+    df['country_cap_kt'] = df['ISO_A3'].map(caps)
+    df.loc[df['country_cap_kt'] > 1e6, 'country_cap_kt'] = np.nan
+
+    demand_per_point = h2_demand / (n_global if n_global is not None else len(df))
+    df_sorted = df.sort_values('Total Cost per kg H2').copy()
+
+    country_used: dict = {}
+    within_cap_flags = []
+
+    for _, row in df_sorted.iterrows():
+        iso = row.get('ISO_A3')
+        cap = caps.get(iso, np.inf) if (isinstance(iso, str) and iso != '---') else np.inf
+        used = country_used.get(iso, 0.0)
+
+        if used + demand_per_point <= cap:
+            within_cap_flags.append(True)
+            country_used[iso] = used + demand_per_point
+        else:
+            within_cap_flags.append(False)
+
+    df_sorted['within_cap'] = within_cap_flags
+    df_sorted['cap_rank'] = np.nan
+    mask = df_sorted['within_cap']
+    df_sorted.loc[mask, 'cap_rank'] = np.arange(1, mask.sum() + 1)
+    df = df_sorted.reindex(df.index)
+    return df
+
+
 @st.cache_data(show_spinner='Recomputing capacity limits…')
 def recompute_within_cap(df: pd.DataFrame, demand_kt: float, year: int) -> pd.DataFrame:
     """
     Re-run apply_capacity_limits with the selected demand value.
     Cached so repeated slider moves at the same value don't recompute.
     """
-    from main import apply_capacity_limits
-    return apply_capacity_limits(df, demand_kt, year)
+    return _apply_capacity_limits(df, demand_kt, year, caps=_get_caps_for_year(year))
 
 
 # ---------------------------------------------------------------------------
