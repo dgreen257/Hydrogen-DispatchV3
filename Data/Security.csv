@@ -1,0 +1,182 @@
+﻿Country / Territory,ISO3,Region,CPI score 2025
+Denmark,DNK,WE/EU,89
+Finland,FIN,WE/EU,88
+Singapore,SGP,AP,84
+New Zealand,NZL,AP,81
+Norway,NOR,WE/EU,81
+Sweden,SWE,WE/EU,80
+Switzerland,CHE,WE/EU,80
+Luxembourg,LUX,WE/EU,78
+Netherlands,NLD,WE/EU,78
+Germany,DEU,WE/EU,77
+Iceland,ISL,WE/EU,77
+Australia,AUS,AP,76
+Estonia,EST,WE/EU,76
+Hong Kong,HKG,AP,76
+Ireland,IRL,WE/EU,76
+Canada,CAN,AME,75
+Uruguay,URY,AME,73
+Bhutan,BTN,AP,71
+Japan,JPN,AP,71
+United Kingdom,GBR,WE/EU,70
+Austria,AUT,WE/EU,69
+Belgium,BEL,WE/EU,69
+United Arab Emirates,ARE,MENA,69
+Barbados,BRB,AME,68
+Seychelles,SYC,SSA,68
+Taiwan,TWN,AP,68
+France,FRA,WE/EU,66
+Lithuania,LTU,WE/EU,65
+Bahamas,BHS,AME,64
+United States of America,USA,AME,64
+Chile,CHL,AME,63
+"Korea, South",KOR,AP,63
+Saint Vincent and the Grenadines,VCT,AME,63
+Cabo Verde,CPV,SSA,62
+Israel,ISR,MENA,62
+Dominica,DMA,AME,60
+Latvia,LVA,WE/EU,60
+Czechia,CZE,WE/EU,59
+Saint Lucia,LCA,AME,59
+Botswana,BWA,SSA,58
+Qatar,QAT,MENA,58
+Rwanda,RWA,SSA,58
+Slovenia,SVN,WE/EU,58
+Saudi Arabia,SAU,MENA,57
+Costa Rica,CRI,AME,56
+Grenada,GRD,AME,56
+Portugal,PRT,WE/EU,56
+Cyprus,CYP,WE/EU,55
+Fiji,FJI,AP,55
+Spain,ESP,WE/EU,55
+Italy,ITA,WE/EU,53
+Poland,POL,WE/EU,53
+Malaysia,MYS,AP,52
+Oman,OMN,MENA,52
+Bahrain,BHR,MENA,50
+Georgia,GEO,ECA,50
+Greece,GRC,WE/EU,50
+Jordan,JOR,MENA,50
+Malta,MLT,WE/EU,49
+Mauritius,MUS,SSA,48
+Slovakia,SVK,WE/EU,48
+Croatia,HRV,WE/EU,47
+Vanuatu,VUT,AP,47
+Armenia,ARM,ECA,46
+Kuwait,KWT,MENA,46
+Montenegro,MNE,ECA,46
+Namibia,NAM,SSA,46
+Senegal,SEN,SSA,46
+Benin,BEN,SSA,45
+Romania,ROU,WE/EU,45
+Sao Tome and Principe,STP,SSA,45
+Jamaica,JAM,AME,44
+Solomon Islands,SLB,AP,44
+Timor-Leste,TLS,AP,44
+China,CHN,AP,43
+Cote d'Ivoire,CIV,SSA,43
+Ghana,GHA,SSA,43
+Kosovo,KSV,ECA,43
+Moldova,MDA,ECA,42
+South Africa,ZAF,SSA,41
+Trinidad and Tobago,TTO,AME,41
+Vietnam,VNM,AP,41
+Bulgaria,BGR,WE/EU,40
+Burkina Faso,BFA,SSA,40
+Cuba,CUB,AME,40
+Guyana,GUY,AME,40
+Hungary,HUN,WE/EU,40
+North Macedonia,MKD,ECA,40
+Tanzania,TZA,SSA,40
+Albania,ALB,ECA,39
+India,IND,AP,39
+Maldives,MDV,AP,39
+Morocco,MAR,MENA,39
+Tunisia,TUN,MENA,39
+Ethiopia,ETH,SSA,38
+Kazakhstan,KAZ,ECA,38
+Suriname,SUR,AME,38
+Colombia,COL,AME,37
+Dominican Republic,DOM,AME,37
+Gambia,GMB,SSA,37
+Lesotho,LSO,SSA,37
+Zambia,ZMB,SSA,37
+Argentina,ARG,AME,36
+Belize,BLZ,AME,36
+Ukraine,UKR,ECA,36
+Brazil,BRA,AME,35
+Sri Lanka,LKA,AP,35
+Algeria,DZA,MENA,34
+Bosnia and Herzegovina,BIH,ECA,34
+Indonesia,IDN,AP,34
+Laos,LAO,AP,34
+Malawi,MWI,SSA,34
+Nepal,NPL,AP,34
+Sierra Leone,SLE,SSA,34
+Ecuador,ECU,AME,33
+Panama,PAN,AME,33
+Serbia,SRB,ECA,33
+Thailand,THA,AP,33
+Angola,AGO,SSA,32
+El Salvador,SLV,AME,32
+Philippines,PHL,AP,32
+Togo,TGO,SSA,32
+Belarus,BLR,ECA,31
+Djibouti,DJI,SSA,31
+Mongolia,MNG,AP,31
+Niger,NER,SSA,31
+Turkey,TUR,ECA,31
+Uzbekistan,UZB,ECA,31
+Azerbaijan,AZE,ECA,30
+Egypt,EGY,MENA,30
+Kenya,KEN,SSA,30
+Mauritania,MRT,SSA,30
+Peru,PER,AME,30
+Gabon,GAB,SSA,29
+Bolivia,BOL,AME,28
+Iraq,IRQ,MENA,28
+Liberia,LBR,SSA,28
+Mali,MLI,SSA,28
+Pakistan,PAK,AP,28
+Mexico,MEX,AME,27
+Cameroon,CMR,SSA,26
+Guatemala,GTM,AME,26
+Guinea,GIN,SSA,26
+Kyrgyzstan,KGZ,ECA,26
+Nigeria,NGA,SSA,26
+Papua New Guinea,PNG,AP,26
+Madagascar,MDG,SSA,25
+Uganda,UGA,SSA,25
+Bangladesh,BGD,AP,24
+Central African Republic,CAF,SSA,24
+Paraguay,PRY,AME,24
+Congo,COG,SSA,23
+Eswatini,SWZ,SSA,23
+Iran,IRN,MENA,23
+Lebanon,LBN,MENA,23
+Chad,TCD,SSA,22
+Honduras,HND,AME,22
+Russia,RUS,ECA,22
+Zimbabwe,ZWE,SSA,22
+Guinea Bissau,GNB,SSA,21
+Mozambique,MOZ,SSA,21
+Cambodia,KHM,AP,20
+Comoros,COM,SSA,20
+Democratic Republic of the Congo,COD,SSA,20
+Tajikistan,TJK,ECA,19
+Burundi,BDI,SSA,17
+Turkmenistan,TKM,ECA,17
+Afghanistan,AFG,AP,16
+Haiti,HTI,AME,16
+Myanmar,MMR,AP,16
+Equatorial Guinea,GNQ,SSA,15
+"Korea, North",PRK,AP,15
+Syria,SYR,MENA,15
+Nicaragua,NIC,AME,14
+Sudan,SDN,SSA,14
+Eritrea,ERI,SSA,13
+Libya,LBY,MENA,13
+Yemen,YEM,MENA,13
+Venezuela,VEN,AME,10
+Somalia,SOM,SSA,9
+South Sudan,SSD,SSA,9
