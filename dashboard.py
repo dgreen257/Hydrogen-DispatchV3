@@ -437,36 +437,55 @@ def fig_supply_curve(results_with_country: dict, h2_demand_kt: float,
     return fig
 
 
-def fig_cost_breakdown(dfs_filtered: dict, show_corridors: list[str]) -> go.Figure:
-    """Stacked bar: median generation + transport cost per corridor (within-cap points)."""
-    labels, gen_costs, trans_costs = [], [], []
+def fig_cost_breakdown(dfs_filtered: dict, show_corridors: list[str], n_countries: int = 5) -> go.Figure:
+    """Subplots: stacked bar of gen + transport cost for the cheapest N countries per corridor."""
+    active = [cid for cid in show_corridors
+              if dfs_filtered.get(cid) is not None and not dfs_filtered[cid].empty]
+    if not active:
+        return go.Figure().update_layout(title='No data')
 
-    for cid in show_corridors:
-        df = dfs_filtered.get(cid)
-        if df is None or df.empty:
+    fig = make_subplots(
+        rows=1, cols=len(active),
+        subplot_titles=[f'Corridor {cid}' for cid in active],
+        shared_yaxes=True,
+    )
+
+    showlegend = True
+    for i, cid in enumerate(active, 1):
+        df = dfs_filtered[cid]
+        valid = df.dropna(subset=['Total Cost per kg H2', 'Gen. cost per kg H2',
+                                  'Transport Cost per kg H2'])
+        if 'Country' not in valid.columns or valid.empty:
             continue
-        labels.append(f'Corridor {cid}')
-        gen_costs.append(df['Gen. cost per kg H2'].median())
-        trans_costs.append(df['Transport Cost per kg H2'].median())
+        ctry = (valid.groupby('Country')
+                     .agg(gen_cost=('Gen. cost per kg H2', 'mean'),
+                          trans_cost=('Transport Cost per kg H2', 'mean'),
+                          total_cost=('Total Cost per kg H2', 'mean'))
+                     .sort_values('total_cost')
+                     .head(n_countries)
+                     .reset_index())
 
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        name='Generation', x=labels, y=gen_costs,
-        marker_color='#457B9D',
-        hovertemplate='Generation: %{y:.2f} €/kg H₂<extra></extra>',
-    ))
-    fig.add_trace(go.Bar(
-        name='Transport', x=labels, y=trans_costs,
-        marker_color='#E63946',
-        hovertemplate='Transport: %{y:.2f} €/kg H₂<extra></extra>',
-    ))
+        fig.add_trace(go.Bar(
+            name='Generation', x=ctry['Country'], y=ctry['gen_cost'],
+            marker_color='#457B9D',
+            hovertemplate='%{x}<br>Generation: %{y:.2f} €/kg H₂<extra></extra>',
+            legendgroup='gen', showlegend=showlegend,
+        ), row=1, col=i)
+        fig.add_trace(go.Bar(
+            name='Transport', x=ctry['Country'], y=ctry['trans_cost'],
+            marker_color='#E63946',
+            hovertemplate='%{x}<br>Transport: %{y:.2f} €/kg H₂<extra></extra>',
+            legendgroup='trans', showlegend=showlegend,
+        ), row=1, col=i)
+        showlegend = False
+
     fig.update_layout(
         barmode='stack',
-        title='Cost Breakdown — Median of Within-Cap Points',
+        title=f'Cost Breakdown — Cheapest {n_countries} Countries per Corridor',
         yaxis_title='Cost (€/kg H₂)',
         legend=dict(orientation='h', yanchor='bottom', y=1.02),
         plot_bgcolor='white',
-        height=400,
+        height=450,
     )
     return fig
 
@@ -566,7 +585,7 @@ def fig_source_map(dfs_filtered: dict, show_corridors: list[str],
 
     fig.update_geos(**GEO_LAYOUT)
     fig.update_traces(marker_size=3)
-    fig.update_layout(height=height)
+    fig.update_layout(height=height, margin=dict(l=0, r=0, t=50, b=0))
     return fig
 
 
@@ -624,7 +643,7 @@ def fig_port_source_map(df: pd.DataFrame, metric: str, port_label: str,
 
     fig.update_geos(**GEO_LAYOUT)
     fig.update_traces(marker_size=3)
-    fig.update_layout(height=height)
+    fig.update_layout(height=height, margin=dict(l=0, r=0, t=50, b=0))
     return fig
 
 
@@ -1676,16 +1695,15 @@ def main():
     st.divider()
 
     # ── Main charts ──────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         'Supply Curve',
         'Cost Breakdown',
-        'Emissions',
         'Source Maps',
         'Transport Modes',
         'Country Caps',
         'Flow Map',
         'Assumptions',
-        '⚖️ Strategic Dispatch',
+        'Strategic Dispatch',
     ])
 
     with tab1:
@@ -1707,26 +1725,6 @@ def main():
         st.caption('Median generation and transport cost across within-cap source points.')
 
     with tab3:
-        st.plotly_chart(
-            fig_emissions_breakdown(dfs_filtered, show_corridors, red3_threshold),
-            width="stretch",
-        )
-
-        if not summary_df.empty:
-            st.subheader('% of within-cap points below RED III threshold')
-            bar_data = summary_df[['Corridor', '% below RED III']].dropna()
-            if not bar_data.empty:
-                fig_pct = px.bar(
-                    bar_data, x='Corridor', y='% below RED III',
-                    color_discrete_sequence=['#2A9D8F'],
-                    text_auto='.1f',
-                )
-                fig_pct.add_hline(y=100, line_dash='dot', line_color='grey')
-                fig_pct.update_layout(yaxis_range=[0, 105], height=300,
-                                      plot_bgcolor='white')
-                st.plotly_chart(fig_pct, width="stretch")
-
-    with tab4:
         # ── Port selector (affects Total Cost, Transport Cost, Transport Mode maps) ──
         _port_keys  = list(PORT_OPTIONS.keys())
         _port_labels = list(PORT_OPTIONS.values())
@@ -1809,7 +1807,7 @@ def main():
         with _r4c2:
             st.plotly_chart(fig_water_stress_map(height=380), use_container_width=True)
 
-    with tab5:
+    with tab4:
         c1, c2 = st.columns([1, 1])
         with c1:
             st.plotly_chart(
@@ -1830,7 +1828,7 @@ def main():
             if mode_rows:
                 st.dataframe(pd.DataFrame(mode_rows), hide_index=True)
 
-    with tab6:
+    with tab5:
         caps_df = _load_caps_df()
         if caps_df.empty:
             st.warning(
@@ -1863,7 +1861,7 @@ def main():
                 top20.columns = ['Country (ISO A3)', 'Capacity (kt H₂/yr)', 'Source']
                 st.dataframe(top20, hide_index=True, use_container_width=True)
 
-    with tab7:
+    with tab6:
         n_countries_flow = st.slider(
             'Top N source countries per corridor',
             min_value=5, max_value=30, value=15, step=1,
@@ -1879,7 +1877,7 @@ def main():
             'Dot colour = transport medium; dot size ∝ allocated volume.'
         )
 
-    with tab8:
+    with tab7:
         st.subheader('Technology Cost Assumptions')
         st.caption(
             'Global baseline CAPEX before regional adjustment. '
@@ -1913,7 +1911,7 @@ def main():
             use_container_width=True,
         )
 
-    with tab9:
+    with tab8:
         st.header('Strategic Multi-Criteria Dispatch')
         st.caption(
             'Adjust the objective weights to explore trade-offs between cost, energy security, '
