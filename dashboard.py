@@ -1447,7 +1447,7 @@ def main():
         layout='wide',
     )
 
-    st.title('Green Hydrogen — EHB Corridor Analysis')
+    st.title('EU Green Hydrogen Supply Dashboard')
     st.caption(
         'Transport costs pre-computed once; generation costs calculated live from CAPEX sliders. '
         'Adjust Solar, Wind, and Electrolyser CAPEX to explore cost sensitivity in real time.'
