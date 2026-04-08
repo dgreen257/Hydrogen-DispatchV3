@@ -169,25 +169,23 @@ def generation_costs(df_ren, h2_demand, year=2020, elec_type='alkaline',
                           + comp_elec * h2_demand * 1000)
 
     # ------------------------------------------------------------------
-    # Per-row location factors (region-specific capex multiplier + country-level WACC)
+    # Per-row location factors (region-specific capex multiplier + WACC)
     # ------------------------------------------------------------------
     if location_adjusted and 'H2_Region' in df_ren.columns:
-        solar_factor  = df_ren['H2_Region'].map(SOLAR_CAPEX_FACTOR).fillna(1.0)
-        wind_factor   = df_ren['H2_Region'].map(WIND_CAPEX_FACTOR).fillna(1.0)
-        # Regional WACC as fallback for the ~17 countries not in the CSV datasets
-        regional_wacc = df_ren['H2_Region'].map(WACC).fillna(0.08)
+        solar_factor = df_ren['H2_Region'].map(SOLAR_CAPEX_FACTOR).fillna(1.0)
+        wind_factor  = df_ren['H2_Region'].map(WIND_CAPEX_FACTOR).fillna(1.0)
         if 'ISO_A3' in df_ren.columns:
-            # Country-level, technology-specific WACC from CSV datasets
-            wacc_ren  = df_ren['ISO_A3'].map(WACC_COUNTRY_REN).fillna(regional_wacc)
-            wacc_elec = df_ren['ISO_A3'].map(WACC_COUNTRY_ELEC).fillna(regional_wacc + 0.02)
+            region_wacc = df_ren['H2_Region'].map(WACC)
+            wacc_ren  = df_ren['ISO_A3'].map(WACC_COUNTRY_REN).fillna(region_wacc).fillna(0.08)
+            wacc_elec = df_ren['ISO_A3'].map(WACC_COUNTRY_ELEC).fillna(region_wacc + 0.02).fillna(0.10)
         else:
-            wacc_ren  = regional_wacc
-            wacc_elec = regional_wacc + 0.02
+            wacc_ren  = df_ren['H2_Region'].map(WACC).fillna(0.08)
+            wacc_elec = wacc_ren + 0.02
     else:
         solar_factor = 1.0
         wind_factor  = 1.0
-        wacc_ren     = 0.08   # flat global fallback
-        wacc_elec    = 0.10   # +2% technology risk premium
+        wacc_ren  = 0.08   # flat global fallback
+        wacc_elec = 0.10
 
     capex_solar = capex_solar_global * solar_factor   # [EUR/kWp] per row
 
