@@ -571,7 +571,7 @@ def fig_source_map(dfs_filtered: dict, show_corridors: list[str],
             title=f'Source Locations — {metric}',
         )
     else:
-        p_hi = combined[col].quantile(0.97 if 'Gen' in col else 0.95)
+        p_hi = combined[col].quantile(0.97)
         fig = px.scatter_geo(
             combined, lat='Latitude', lon='Longitude',
             color=col,
