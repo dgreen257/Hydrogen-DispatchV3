@@ -2498,7 +2498,7 @@ _H2_ELEC_SOURCE_COLOURS = {
 @st.cache_data(show_spinner='Loading H₂ projects data…')
 def load_h2_projects() -> pd.DataFrame:
     """Load IEA Hydrogen Production Projects database from the Excel file."""
-    path = 'Data/Hydrogen Production Projects.xlsx'
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Data', 'Hydrogen Production Projects.xlsx')
     if not os.path.exists(path):
         return pd.DataFrame()
     df = pd.read_excel(path, sheet_name=0, skiprows=2)
