@@ -2227,18 +2227,9 @@ def main():
             total_w = w_cost + w_sec + w_dep + w_water
             st.caption(f'Sum of weights: {total_w}')
 
-            st.subheader('Carbon Reference')
-            st.caption('Grey H₂ baseline for carbon-avoided calculation.')
-            ref_cost_grey  = st.number_input(
-                'Grey H₂ cost (€/kg)', value=1.50, step=0.10,
-                min_value=0.5, max_value=5.0, key='strat_ref_cost',
-                help='Typical SMR grey hydrogen: €1.0–2.0/kg.',
-            )
-            ref_emiss_grey = st.number_input(
-                'Grey H₂ emissions (kgCO₂/kgH₂)', value=9.0, step=0.5,
-                min_value=1.0, max_value=15.0, key='strat_ref_emiss',
-                help='SMR without CCS: ~9 kgCO₂/kgH₂.',
-            )
+        # Carbon Reference inputs rendered below after charts; read current values from session state
+        ref_cost_grey  = float(st.session_state.get('strat_ref_cost',  1.50))
+        ref_emiss_grey = float(st.session_state.get('strat_ref_emiss', 9.0))
 
         # ── Run weighted dispatch ──
         if strat_cap_on != cap_on:
@@ -2263,53 +2254,51 @@ def main():
             _strat_disp, h2_demand_kt, float(ref_cost_grey), float(ref_emiss_grey)
         )
 
-        st.divider()
-
-        # ── KPI metric cards ──
-        k1, k2, k3, k4, k5 = st.columns(5)
-        with k1:
-            dc = _strat_kpis.get('delivered_cost', np.nan)
-            st.metric('Delivered Cost', f'{dc:.3f} €/kg' if pd.notna(dc) else '—',
-                      help='Volume-weighted average delivered cost across the strategic dispatch mix.')
-        with k2:
-            sec_val = _strat_kpis.get('weighted_security', np.nan)
-            st.metric('Security (CPI)', f'{sec_val:.0f} / 100' if pd.notna(sec_val) else '—',
-                      help='Volume-weighted average Corruption Perception Index (higher = more secure).')
-        with k3:
-            hhi_val = _strat_kpis.get('hhi', np.nan)
-            div_val = (1.0 - hhi_val) if pd.notna(hhi_val) else np.nan
-            st.metric('Diversification (1−HHI)', f'{div_val:.3f}' if pd.notna(div_val) else '—',
-                      help='1 minus the Herfindahl–Hirschman Index. 1.0 = perfectly diversified; 0.0 = single supplier.')
-        with k4:
-            bws_val = _strat_kpis.get('weighted_water', np.nan)
-            st.metric('Water Stress (BWS)', f'{bws_val:.2f} / 5.0' if pd.notna(bws_val) else '—',
-                      help='Volume-weighted average WRI Aqueduct Baseline Water Stress (lower = less stressed).')
-        with k5:
-            ca_val = _strat_kpis.get('carbon_avoided_cost', np.nan)
-            if pd.notna(ca_val):
-                ca_str = f'{ca_val:.0f} €/tCO₂' if ca_val > 0 else f'{ca_val:.0f} €/tCO₂ (premium-free)'
-            else:
-                ca_str = 'N/A'
-            st.metric('Carbon Avoided Cost', ca_str,
-                      help='(Delivered cost − grey H₂ cost) ÷ (grey emissions − green emissions) × 1000. '
-                           'Negative means green H₂ is already cheaper than grey.')
-
-        n_c = _strat_kpis.get('n_countries', 0)
-        tot_alloc = _strat_disp['allocated_kt'].sum() if not _strat_disp.empty else 0
-        st.caption(
-            f'Sourcing from **{n_c} countries** · '
-            f'Total allocated: **{tot_alloc/1000:.1f} Mt H₂/yr** '
-            f'(demand: {h2_demand_kt/1000:.1f} Mt H₂/yr)'
-        )
-
-        st.divider()
-
-        # ── Radar chart + source map ──
+        # ── Charts in right column: map on top, radar below ──
         _fig_strat_radar = fig_strategic_radar(_strat_kpis)
         _fig_strat_map   = fig_strategic_source_map(_strat_disp, h2_demand_kt)
         with right_col:
+            st.plotly_chart(_fig_strat_map,   use_container_width=True)
             st.plotly_chart(_fig_strat_radar, use_container_width=True)
-            st.plotly_chart(_fig_strat_map, use_container_width=True)
+
+        # ── Summary list + Carbon Reference at bottom of left column ──
+        dc      = _strat_kpis.get('delivered_cost', np.nan)
+        sec_val = _strat_kpis.get('weighted_security', np.nan)
+        hhi_val = _strat_kpis.get('hhi', np.nan)
+        div_val = (1.0 - hhi_val) if pd.notna(hhi_val) else np.nan
+        bws_val = _strat_kpis.get('weighted_water', np.nan)
+        ca_val  = _strat_kpis.get('carbon_avoided_cost', np.nan)
+        n_c       = _strat_kpis.get('n_countries', 0)
+        tot_alloc = _strat_disp['allocated_kt'].sum() if not _strat_disp.empty else 0
+        if pd.notna(ca_val):
+            ca_str = f'{ca_val:.0f} €/tCO₂' if ca_val > 0 else f'{ca_val:.0f} €/tCO₂ (premium-free)'
+        else:
+            ca_str = 'N/A'
+        with left_col:
+            st.subheader('Dispatch Summary')
+            st.markdown(
+                f'- **Countries:** {n_c}\n'
+                f'- **Total allocated:** {tot_alloc/1000:.1f} Mt H₂/yr'
+                f' (demand: {h2_demand_kt/1000:.1f} Mt H₂/yr)\n'
+                f'- **Delivered cost:** {"—" if pd.isna(dc) else f"{dc:.3f} €/kg"}\n'
+                f'- **Security (CPI):** {"—" if pd.isna(sec_val) else f"{sec_val:.0f} / 100"}\n'
+                f'- **Diversification (1−HHI):** {"—" if pd.isna(div_val) else f"{div_val:.3f}"}\n'
+                f'- **Water stress (BWS):** {"—" if pd.isna(bws_val) else f"{bws_val:.2f} / 5.0"}\n'
+                f'- **Carbon avoided cost:** {ca_str}'
+            )
+            st.divider()
+            st.subheader('Carbon Reference')
+            st.caption('Grey H₂ baseline for carbon-avoided calculation.')
+            st.number_input(
+                'Grey H₂ cost (€/kg)', value=1.50, step=0.10,
+                min_value=0.5, max_value=5.0, key='strat_ref_cost',
+                help='Typical SMR grey hydrogen: €1.0–2.0/kg.',
+            )
+            st.number_input(
+                'Grey H₂ emissions (kgCO₂/kgH₂)', value=9.0, step=0.5,
+                min_value=1.0, max_value=15.0, key='strat_ref_emiss',
+                help='SMR without CCS: ~9 kgCO₂/kgH₂.',
+            )
 
         # ── Dispatch detail table ──
         if not _strat_disp.empty:
