@@ -631,7 +631,7 @@ def fig_port_source_map(df: pd.DataFrame, metric: str, port_label: str,
             title=title,
         )
     else:
-        p_hi = 4.0 if 'Transport' in col else plot_df[col].quantile(0.90)
+        p_hi = 4.5 if 'Transport' in col else plot_df[col].quantile(0.90)
         p_lo = plot_df[col].min()
         fig = px.scatter_geo(
             plot_df, lat='Latitude', lon='Longitude',
