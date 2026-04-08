@@ -571,10 +571,12 @@ def fig_source_map(dfs_filtered: dict, show_corridors: list[str],
             title=f'Source Locations — {metric}',
         )
     else:
+        p_hi = combined[col].quantile(0.95)
         fig = px.scatter_geo(
             combined, lat='Latitude', lon='Longitude',
             color=col,
             color_continuous_scale='Cividis',
+            range_color=[combined[col].min(), p_hi],
             hover_data={'ISO_A3': True, 'Total Cost per kg H2': ':.2f', col: ':.3f'},
             projection='natural earth',
             title=f'Source Locations — {metric}',
@@ -629,10 +631,12 @@ def fig_port_source_map(df: pd.DataFrame, metric: str, port_label: str,
             title=title,
         )
     else:
+        p_hi = plot_df[col].quantile(0.95)
         fig = px.scatter_geo(
             plot_df, lat='Latitude', lon='Longitude',
             color=col,
             color_continuous_scale='Cividis',
+            range_color=[plot_df[col].min(), p_hi],
             hover_data={'ISO_A3': True, col: ':.3f'},
             projection='natural earth',
             title=title,
@@ -1534,8 +1538,8 @@ _REGION_ORDER_DIAG = [
 
 
 def fig_capex_assumptions(selected_year: int, elec_type: str = 'alkaline') -> go.Figure:
-    """Line chart of global baseline CAPEX trajectories 2020–2050 with selected year highlighted."""
-    years = list(range(2020, 2051))
+    """Line chart of global baseline CAPEX trajectories 2025–2050 with selected year highlighted."""
+    years = list(range(2025, 2051))
     params = [global_capex(y, elec_type) for y in years]
     wind_vals  = [p['capex_wind']       for p in params]
     solar_vals = [p['capex_solar']      for p in params]
@@ -2029,31 +2033,31 @@ def main():
 
         st.divider()
 
-        # Row 1: Total Cost (port) | Generation Cost (corridor)
-        _r1c1, _r1c2 = st.columns(2)
-        with _r1c1:
-            if _port_df.empty:
-                st.warning(f'No port data for {_selected_port_label}, {selected_year}.')
-            else:
-                st.plotly_chart(
-                    fig_port_source_map(_port_df, 'Total Cost (€/kg H₂)',
-                                        _selected_port_label, height=380),
-                    use_container_width=True,
-                )
-        with _r1c2:
+        # Row 1: Total Cost (port) — full width
+        if _port_df.empty:
+            st.warning(f'No port data for {_selected_port_label}, {selected_year}.')
+        else:
+            st.plotly_chart(
+                fig_port_source_map(_port_df, 'Total Cost (€/kg H₂)',
+                                    _selected_port_label, height=380),
+                use_container_width=True,
+            )
+
+        # Row 2: Generation Cost (corridor) | Transport Cost (port)
+        _r2c1, _r2c2 = st.columns(2)
+        with _r2c1:
             st.plotly_chart(
                 fig_source_map(dfs_with_gen, show_corridors,
                                'Generation Cost (€/kg H₂)', height=380),
                 use_container_width=True,
             )
-
-        # Row 2: Transport Cost (port)
-        if not _port_df.empty:
-            st.plotly_chart(
-                fig_port_source_map(_port_df, 'Transport Cost (€/kg H₂)',
-                                    _selected_port_label, height=380),
-                use_container_width=True,
-            )
+        with _r2c2:
+            if not _port_df.empty:
+                st.plotly_chart(
+                    fig_port_source_map(_port_df, 'Transport Cost (€/kg H₂)',
+                                        _selected_port_label, height=380),
+                    use_container_width=True,
+                )
 
         # Row 3: Cheapest Transport Mode (port) | Energy Source (corridor)
         _r3c1, _r3c2 = st.columns(2)
