@@ -582,6 +582,7 @@ def fig_source_map(dfs_filtered: dict, show_corridors: list[str],
             labels={col: metric},
         )
         fig.update_coloraxes(cmin=combined[col].min(), cmax=p_hi, colorbar_title=metric)
+        fig.update_traces(marker_cmin=combined[col].min(), marker_cmax=p_hi)
 
     fig.update_geos(**GEO_LAYOUT)
     fig.update_traces(marker_size=3)
@@ -641,6 +642,7 @@ def fig_port_source_map(df: pd.DataFrame, metric: str, port_label: str,
             labels={col: metric},
         )
         fig.update_coloraxes(cmin=plot_df[col].min(), cmax=p_hi, colorbar_title=metric)
+        fig.update_traces(marker_cmin=plot_df[col].min(), marker_cmax=p_hi)
 
     fig.update_geos(**GEO_LAYOUT)
     fig.update_traces(marker_size=3)
