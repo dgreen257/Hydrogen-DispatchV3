@@ -576,13 +576,12 @@ def fig_source_map(dfs_filtered: dict, show_corridors: list[str],
             combined, lat='Latitude', lon='Longitude',
             color=col,
             color_continuous_scale='Cividis',
-            range_color=[combined[col].min(), p_hi],
             hover_data={'ISO_A3': True, 'Total Cost per kg H2': ':.2f', col: ':.3f'},
             projection='natural earth',
             title=f'Source Locations — {metric}',
             labels={col: metric},
         )
-        fig.update_coloraxes(colorbar_title=metric)
+        fig.update_coloraxes(cmin=combined[col].min(), cmax=p_hi, colorbar_title=metric)
 
     fig.update_geos(**GEO_LAYOUT)
     fig.update_traces(marker_size=3)
@@ -636,13 +635,12 @@ def fig_port_source_map(df: pd.DataFrame, metric: str, port_label: str,
             plot_df, lat='Latitude', lon='Longitude',
             color=col,
             color_continuous_scale='Cividis',
-            range_color=[plot_df[col].min(), p_hi],
             hover_data={'ISO_A3': True, col: ':.3f'},
             projection='natural earth',
             title=title,
             labels={col: metric},
         )
-        fig.update_coloraxes(colorbar_title=metric)
+        fig.update_coloraxes(cmin=plot_df[col].min(), cmax=p_hi, colorbar_title=metric)
 
     fig.update_geos(**GEO_LAYOUT)
     fig.update_traces(marker_size=3)
