@@ -632,17 +632,18 @@ def fig_port_source_map(df: pd.DataFrame, metric: str, port_label: str,
         )
     else:
         p_hi = 3.0 if 'Transport' in col else plot_df[col].quantile(0.90)
+        p_lo = plot_df[col].min()
         fig = px.scatter_geo(
             plot_df, lat='Latitude', lon='Longitude',
             color=col,
             color_continuous_scale='Cividis',
+            range_color=[p_lo, p_hi],
             hover_data={'ISO_A3': True, col: ':.3f'},
             projection='natural earth',
             title=title,
             labels={col: metric},
         )
-        fig.update_coloraxes(cmin=plot_df[col].min(), cmax=p_hi, colorbar_title=metric)
-        fig.update_traces(marker_cauto=False, marker_cmin=plot_df[col].min(), marker_cmax=p_hi)
+        fig.update_coloraxes(cauto=False, cmin=p_lo, cmax=p_hi, colorbar_title=metric)
 
     fig.update_geos(**GEO_LAYOUT)
     fig.update_traces(marker_size=3)
