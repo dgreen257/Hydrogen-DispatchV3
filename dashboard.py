@@ -2213,9 +2213,9 @@ def main():
                  'Overrides the global capacity-limits setting for this tab only.',
         )
 
-        # ── Weight controls ──
-        col_w, col_ref = st.columns([3, 1])
-        with col_w:
+        # ── Layout: left = controls, right = charts ──
+        left_col, right_col = st.columns([1, 2])
+        with left_col:
             st.subheader('Objective Weights')
             st.caption('Weights are auto-normalised — they need not sum to 100.')
             w_cost  = st.slider('Cost',                    0, 100, 25, key='strat_w_cost')
@@ -2227,7 +2227,6 @@ def main():
             total_w = w_cost + w_sec + w_dep + w_water
             st.caption(f'Sum of weights: {total_w}')
 
-        with col_ref:
             st.subheader('Carbon Reference')
             st.caption('Grey H₂ baseline for carbon-avoided calculation.')
             ref_cost_grey  = st.number_input(
@@ -2308,10 +2307,8 @@ def main():
         # ── Radar chart + source map ──
         _fig_strat_radar = fig_strategic_radar(_strat_kpis)
         _fig_strat_map   = fig_strategic_source_map(_strat_disp, h2_demand_kt)
-        col_r, col_m = st.columns(2)
-        with col_r:
+        with right_col:
             st.plotly_chart(_fig_strat_radar, use_container_width=True)
-        with col_m:
             st.plotly_chart(_fig_strat_map, use_container_width=True)
 
         # ── Dispatch detail table ──
