@@ -128,8 +128,7 @@ CHOROPLETH_GEO = dict(
     lataxis_range=[-60, 90],
 )
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-RESULTS_DIR = os.path.join(_HERE, 'Results')
+RESULTS_DIR = 'Results'
 
 # ---------------------------------------------------------------------------
 # Data discovery and loading (cached)
@@ -437,55 +436,36 @@ def fig_supply_curve(results_with_country: dict, h2_demand_kt: float,
     return fig
 
 
-def fig_cost_breakdown(dfs_filtered: dict, show_corridors: list[str], n_countries: int = 5) -> go.Figure:
-    """Subplots: stacked bar of gen + transport cost for the cheapest N countries per corridor."""
-    active = [cid for cid in show_corridors
-              if dfs_filtered.get(cid) is not None and not dfs_filtered[cid].empty]
-    if not active:
-        return go.Figure().update_layout(title='No data')
+def fig_cost_breakdown(dfs_filtered: dict, show_corridors: list[str]) -> go.Figure:
+    """Stacked bar: median generation + transport cost per corridor (within-cap points)."""
+    labels, gen_costs, trans_costs = [], [], []
 
-    fig = make_subplots(
-        rows=1, cols=len(active),
-        subplot_titles=[f'Corridor {cid}' for cid in active],
-        shared_yaxes=True,
-    )
-
-    showlegend = True
-    for i, cid in enumerate(active, 1):
-        df = dfs_filtered[cid]
-        valid = df.dropna(subset=['Total Cost per kg H2', 'Gen. cost per kg H2',
-                                  'Transport Cost per kg H2'])
-        if 'Country' not in valid.columns or valid.empty:
+    for cid in show_corridors:
+        df = dfs_filtered.get(cid)
+        if df is None or df.empty:
             continue
-        ctry = (valid.groupby('Country')
-                     .agg(gen_cost=('Gen. cost per kg H2', 'mean'),
-                          trans_cost=('Transport Cost per kg H2', 'mean'),
-                          total_cost=('Total Cost per kg H2', 'mean'))
-                     .sort_values('total_cost')
-                     .head(n_countries)
-                     .reset_index())
+        labels.append(f'Corridor {cid}')
+        gen_costs.append(df['Gen. cost per kg H2'].median())
+        trans_costs.append(df['Transport Cost per kg H2'].median())
 
-        fig.add_trace(go.Bar(
-            name='Generation', x=ctry['Country'], y=ctry['gen_cost'],
-            marker_color='#457B9D',
-            hovertemplate='%{x}<br>Generation: %{y:.2f} €/kg H₂<extra></extra>',
-            legendgroup='gen', showlegend=showlegend,
-        ), row=1, col=i)
-        fig.add_trace(go.Bar(
-            name='Transport', x=ctry['Country'], y=ctry['trans_cost'],
-            marker_color='#E63946',
-            hovertemplate='%{x}<br>Transport: %{y:.2f} €/kg H₂<extra></extra>',
-            legendgroup='trans', showlegend=showlegend,
-        ), row=1, col=i)
-        showlegend = False
-
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        name='Generation', x=labels, y=gen_costs,
+        marker_color='#457B9D',
+        hovertemplate='Generation: %{y:.2f} €/kg H₂<extra></extra>',
+    ))
+    fig.add_trace(go.Bar(
+        name='Transport', x=labels, y=trans_costs,
+        marker_color='#E63946',
+        hovertemplate='Transport: %{y:.2f} €/kg H₂<extra></extra>',
+    ))
     fig.update_layout(
         barmode='stack',
-        title=f'Cost Breakdown — Cheapest {n_countries} Countries per Corridor',
+        title='Cost Breakdown — Median of Within-Cap Points',
         yaxis_title='Cost (€/kg H₂)',
         legend=dict(orientation='h', yanchor='bottom', y=1.02),
         plot_bgcolor='white',
-        height=450,
+        height=400,
     )
     return fig
 
@@ -585,7 +565,7 @@ def fig_source_map(dfs_filtered: dict, show_corridors: list[str],
 
     fig.update_geos(**GEO_LAYOUT)
     fig.update_traces(marker_size=3)
-    fig.update_layout(height=height, margin=dict(l=0, r=0, t=50, b=0))
+    fig.update_layout(height=height)
     return fig
 
 
@@ -643,7 +623,7 @@ def fig_port_source_map(df: pd.DataFrame, metric: str, port_label: str,
 
     fig.update_geos(**GEO_LAYOUT)
     fig.update_traces(marker_size=3)
-    fig.update_layout(height=height, margin=dict(l=0, r=0, t=50, b=0))
+    fig.update_layout(height=height)
     return fig
 
 
@@ -653,7 +633,7 @@ def fig_port_source_map(df: pd.DataFrame, metric: str, port_label: str,
 
 @st.cache_data(show_spinner=False)
 def load_security_data() -> pd.DataFrame:
-    path = os.path.join(_HERE, 'Data', 'Security.csv')
+    path = 'Data/Security.csv'
     if not os.path.exists(path):
         return pd.DataFrame()
     return pd.read_csv(path)
@@ -661,7 +641,7 @@ def load_security_data() -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def load_water_stress_data() -> pd.DataFrame:
-    path = os.path.join(_HERE, 'Data', 'aqueduct-30-country-rankings.xlsx')
+    path = 'Data/aqueduct-30-country-rankings.xlsx'
     if not os.path.exists(path):
         return pd.DataFrame()
     df = pd.read_excel(path, sheet_name='results country')
@@ -1077,12 +1057,246 @@ def fig_strategic_source_map(
     return fig
 
 
+def _generate_strategic_pdf(
+    scenario: str,
+    year: int,
+    w_cost: int,
+    w_sec: int,
+    w_dep: int,
+    w_water: int,
+    ref_cost_grey: float,
+    ref_emiss_grey: float,
+    strat_cap_on: bool,
+    kpis: dict,
+    dispatch_df: pd.DataFrame,
+    demand_kt: float,
+    fig_radar: go.Figure,
+    fig_map: go.Figure,
+) -> bytes:
+    """Build a landscape A4 PDF report for the strategic dispatch tab."""
+    from io import BytesIO
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.lib import colors
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+        Image, HRFlowable, PageBreak,
+    )
+
+    buf = BytesIO()
+    page_w, _ = landscape(A4)
+    margin = 1.5 * cm
+    usable_w = page_w - 2 * margin
+
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=landscape(A4),
+        leftMargin=margin, rightMargin=margin,
+        topMargin=margin, bottomMargin=margin,
+    )
+
+    styles = getSampleStyleSheet()
+    style_title = ParagraphStyle(
+        'rpt_title', parent=styles['Heading1'],
+        fontSize=18, spaceAfter=4, textColor=colors.HexColor('#1a3a5c'),
+    )
+    style_h2 = ParagraphStyle(
+        'rpt_h2', parent=styles['Heading2'],
+        fontSize=11, spaceBefore=4, spaceAfter=3,
+        textColor=colors.HexColor('#1a3a5c'),
+    )
+    style_body = ParagraphStyle(
+        'rpt_body', parent=styles['Normal'], fontSize=9, spaceAfter=2,
+    )
+    style_small = ParagraphStyle(
+        'rpt_small', parent=styles['Normal'], fontSize=7.5,
+        textColor=colors.HexColor('#666666'),
+    )
+
+    story = []
+
+    # ── Title ──
+    story.append(Paragraph('Strategic Dispatch Report', style_title))
+    story.append(Paragraph(
+        f'Scenario: <b>{scenario}</b> &nbsp;&nbsp;|&nbsp;&nbsp; Year: <b>{year}</b>',
+        style_body,
+    ))
+    story.append(Spacer(1, 0.2 * cm))
+    story.append(HRFlowable(width='100%', thickness=1.5, color=colors.HexColor('#2A9D8F')))
+    story.append(Spacer(1, 0.25 * cm))
+
+    # ── Settings table ──
+    total_w = w_cost + w_sec + w_dep + w_water
+    def _norm(w):
+        return f'{100 * w / total_w:.0f}%' if total_w > 0 else '—'
+
+    settings_data = [
+        ['Weight', 'Raw / Normalised', 'Reference Parameter', 'Value'],
+        ['Cost',            f'{w_cost} ({_norm(w_cost)})',   'Grey H₂ cost',      f'{ref_cost_grey:.2f} €/kg'],
+        ['Security (CPI)',  f'{w_sec} ({_norm(w_sec)})',     'Grey H₂ emissions', f'{ref_emiss_grey:.1f} kgCO₂/kg'],
+        ['Diversification', f'{w_dep} ({_norm(w_dep)})',     'Capacity limits',   'On' if strat_cap_on else 'Off'],
+        ['Water Access',    f'{w_water} ({_norm(w_water)})', '',                  ''],
+    ]
+    s_tbl = Table(settings_data, colWidths=[4.0*cm, 4.2*cm, 5.2*cm, 4.0*cm])
+    s_tbl.setStyle(TableStyle([
+        ('BACKGROUND',     (0, 0), (-1, 0),  colors.HexColor('#1a3a5c')),
+        ('TEXTCOLOR',      (0, 0), (-1, 0),  colors.white),
+        ('FONTNAME',       (0, 0), (-1, 0),  'Helvetica-Bold'),
+        ('FONTSIZE',       (0, 0), (-1, -1), 8.5),
+        ('GRID',           (0, 0), (-1, -1), 0.4, colors.lightgrey),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f7f7f7')]),
+        ('FONTNAME',       (0, 1), (0, -1),  'Helvetica-Bold'),
+        ('FONTNAME',       (2, 1), (2, -1),  'Helvetica-Bold'),
+        ('VALIGN',         (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING',     (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING',  (0, 0), (-1, -1), 3),
+    ]))
+    story.append(s_tbl)
+    story.append(Spacer(1, 0.3 * cm))
+    story.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#cccccc')))
+    story.append(Spacer(1, 0.25 * cm))
+
+    # ── KPI metrics ──
+    story.append(Paragraph('Portfolio Performance', style_h2))
+
+    dc      = kpis.get('delivered_cost', np.nan)
+    sec_val = kpis.get('weighted_security', np.nan)
+    hhi_val = kpis.get('hhi', np.nan)
+    div_val = (1.0 - hhi_val) if pd.notna(hhi_val) else np.nan
+    bws_val = kpis.get('weighted_water', np.nan)
+    ca_val  = kpis.get('carbon_avoided_cost', np.nan)
+    n_c     = kpis.get('n_countries', 0)
+    tot_alloc_kt = dispatch_df['allocated_kt'].sum() if not dispatch_df.empty else 0
+
+    kpi_headers = ['Delivered Cost', 'Security (CPI)', 'Diversification (1−HHI)', 'Water Stress (BWS)', 'Carbon Avoided Cost']
+    kpi_values  = [
+        f'{dc:.3f} €/kg'        if pd.notna(dc)      else '—',
+        f'{sec_val:.0f} / 100'  if pd.notna(sec_val) else '—',
+        f'{div_val:.3f}'        if pd.notna(div_val) else '—',
+        f'{bws_val:.2f} / 5.0' if pd.notna(bws_val) else '—',
+        f'{ca_val:.0f} €/tCO₂' if pd.notna(ca_val)  else 'N/A',
+    ]
+    kpi_cw  = usable_w / 5
+    kpi_tbl = Table([kpi_headers, kpi_values], colWidths=[kpi_cw] * 5)
+    kpi_tbl.setStyle(TableStyle([
+        ('BACKGROUND',     (0, 0), (-1, 0),  colors.HexColor('#2A9D8F')),
+        ('TEXTCOLOR',      (0, 0), (-1, 0),  colors.white),
+        ('FONTNAME',       (0, 0), (-1, 0),  'Helvetica-Bold'),
+        ('FONTSIZE',       (0, 0), (-1, 0),  8),
+        ('ALIGN',          (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME',       (0, 1), (-1, 1),  'Helvetica-Bold'),
+        ('FONTSIZE',       (0, 1), (-1, 1),  12),
+        ('GRID',           (0, 0), (-1, -1), 0.4, colors.lightgrey),
+        ('BACKGROUND',     (0, 1), (-1, 1),  colors.HexColor('#e8f7f5')),
+        ('VALIGN',         (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING',     (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING',  (0, 0), (-1, -1), 5),
+    ]))
+    story.append(kpi_tbl)
+    story.append(Spacer(1, 0.15 * cm))
+    story.append(Paragraph(
+        f'Sourcing from <b>{n_c} countries</b> &nbsp;·&nbsp; '
+        f'Allocated: <b>{tot_alloc_kt / 1000:.2f} Mt H₂/yr</b> &nbsp;·&nbsp; '
+        f'Demand: {demand_kt / 1000:.2f} Mt H₂/yr',
+        style_small,
+    ))
+    story.append(Spacer(1, 0.3 * cm))
+    story.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#cccccc')))
+    story.append(Spacer(1, 0.2 * cm))
+
+    # ── Charts (radar + map side by side) ──
+    chart_w = (usable_w - 0.4 * cm) / 2
+    chart_h = chart_w * 0.68
+
+    from io import BytesIO as _BytesIO
+    radar_img_bytes = fig_radar.to_image(format='png', width=700, height=480, scale=2)
+    map_img_bytes   = fig_map.to_image(format='png', width=700, height=480, scale=2)
+
+    chart_tbl = Table(
+        [[Image(_BytesIO(radar_img_bytes), width=chart_w, height=chart_h),
+          Image(_BytesIO(map_img_bytes),   width=chart_w, height=chart_h)]],
+        colWidths=[chart_w, chart_w],
+    )
+    chart_tbl.setStyle(TableStyle([
+        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 0),
+        ('TOPPADDING',    (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ('INNERGRID',     (0, 0), (-1, -1), 0, colors.white),
+        ('BOX',           (0, 0), (-1, -1), 0, colors.white),
+    ]))
+    story.append(chart_tbl)
+
+    # ── Dispatch detail table (second page) ──
+    if not dispatch_df.empty:
+        story.append(PageBreak())
+        story.append(Paragraph('Dispatch Detail', style_h2))
+        story.append(Paragraph(
+            f'Scenario: <b>{scenario}</b> &nbsp;|&nbsp; Year: <b>{year}</b>',
+            style_body,
+        ))
+        story.append(Spacer(1, 0.2 * cm))
+
+        _disp = dispatch_df.copy()
+        _disp['allocated_Mt'] = (_disp['allocated_kt'] / 1000).round(3)
+        _disp['pct_demand']   = (_disp['allocated_kt'] / demand_kt * 100).round(2)
+
+        col_order = {
+            'Country':              'Country',
+            'ISO_A3':               'ISO',
+            'corridor_id':          'Corridor',
+            'allocated_Mt':         'Alloc (Mt/yr)',
+            'pct_demand':           '% Demand',
+            'rep_cost_per_kg':      'Cost (€/kg)',
+            'rep_emissions_per_kg': 'Emissions (kg)',
+            'cpi_score':            'CPI',
+            'bws_score':            'BWS',
+        }
+        present  = [c for c in col_order if c in _disp.columns]
+        headers_d = [col_order[c] for c in present]
+
+        def _fmt(val):
+            if pd.isna(val): return '—'
+            if isinstance(val, float): return f'{val:.2f}'
+            return str(val)
+
+        rows_d = [[_fmt(row[c]) for c in present] for _, row in _disp.iterrows()]
+        cw_d   = usable_w / len(present)
+        d_tbl  = Table([headers_d] + rows_d, colWidths=[cw_d] * len(present), repeatRows=1)
+        d_tbl.setStyle(TableStyle([
+            ('BACKGROUND',     (0, 0), (-1, 0),  colors.HexColor('#1a3a5c')),
+            ('TEXTCOLOR',      (0, 0), (-1, 0),  colors.white),
+            ('FONTNAME',       (0, 0), (-1, 0),  'Helvetica-Bold'),
+            ('FONTSIZE',       (0, 0), (-1, -1), 8),
+            ('GRID',           (0, 0), (-1, -1), 0.3, colors.lightgrey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+            ('ALIGN',          (1, 0), (-1, -1), 'CENTER'),
+            ('VALIGN',         (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING',     (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING',  (0, 0), (-1, -1), 3),
+        ]))
+        story.append(d_tbl)
+
+    # ── Footer ──
+    story.append(Spacer(1, 0.4 * cm))
+    story.append(Paragraph(
+        f'Generated {pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")} · '
+        'Green Hydrogen EHB Corridor Analysis',
+        style_small,
+    ))
+
+    doc.build(story)
+    return buf.getvalue()
+
+
 # ---------------------------------------------------------------------------
 
 @st.cache_data(show_spinner='Loading capacity data…')
 def _load_caps_df() -> pd.DataFrame:
     """Load combined_caps_by_year.csv, returning empty DataFrame if missing."""
-    path = os.path.join(_HERE, 'Data', 'combined_caps_by_year.csv')
+    path = 'Data/combined_caps_by_year.csv'
     if not os.path.exists(path):
         return pd.DataFrame()
     df = pd.read_csv(path)
@@ -1361,20 +1575,30 @@ def fig_regional_factors_dash() -> go.Figure:
     solar_f = [SOLAR_CAPEX_FACTOR.get(r, 1.0) for r in regions]
     wind_f  = [WIND_CAPEX_FACTOR.get(r, 1.0)  for r in regions]
     wacc_v  = [WACC.get(r, 0.09) * 100         for r in regions]
+    # Electrolyser WACC ≈ renewable WACC + 2% technology risk premium (from CSV data)
+    wacc_elec_v = [v + 2.0 for v in wacc_v]
 
     fig = make_subplots(
         rows=1, cols=3,
-        subplot_titles=('Solar CAPEX factor (× baseline)', 'Wind CAPEX factor (× baseline)', 'WACC (%)'),
+        subplot_titles=('Solar CAPEX factor (× baseline)', 'Wind CAPEX factor (× baseline)', 'WACC (%) — Renewable / Electrolyser'),
         horizontal_spacing=0.08,
     )
     for col, vals, colour in [
         (1, solar_f, '#E69F00'),
         (2, wind_f,  '#457B9D'),
-        (3, wacc_v,  '#2A9D8F'),
     ]:
         fig.add_trace(go.Bar(
             x=regions, y=vals, marker_color=colour, opacity=0.85, showlegend=False,
         ), row=1, col=col)
+    # WACC: two series — renewable (teal) and electrolyser (orange-red)
+    fig.add_trace(go.Bar(
+        x=regions, y=wacc_v, name='Renewable WACC',
+        marker_color='#2A9D8F', opacity=0.85,
+    ), row=1, col=3)
+    fig.add_trace(go.Bar(
+        x=regions, y=wacc_elec_v, name='Electrolyser WACC',
+        marker_color='#E76F51', opacity=0.85,
+    ), row=1, col=3)
     for col in [1, 2]:
         fig.add_hline(y=1.0, line_dash='dot', line_color='grey', row=1, col=col)
     fig.add_hline(y=8.0, line_dash='dot', line_color='grey', row=1, col=3)
@@ -1383,7 +1607,7 @@ def fig_regional_factors_dash() -> go.Figure:
     fig.update_layout(
         title='<b>Regional CAPEX multipliers and WACC</b>',
         plot_bgcolor='white', paper_bgcolor='white', font=dict(size=11),
-        height=380,
+        height=380, barmode='group', legend=dict(x=0.72, y=1.12, orientation='h'),
     )
     return fig
 
@@ -1447,7 +1671,7 @@ def main():
         layout='wide',
     )
 
-    st.title('EU Green Hydrogen Supply Dashboard')
+    st.title('Green Hydrogen — EHB Corridor Analysis')
     st.caption(
         'Transport costs pre-computed once; generation costs calculated live from CAPEX sliders. '
         'Adjust Solar, Wind, and Electrolyser CAPEX to explore cost sensitivity in real time.'
@@ -1695,15 +1919,17 @@ def main():
     st.divider()
 
     # ── Main charts ──────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
         'Supply Curve',
         'Cost Breakdown',
+        'Emissions',
         'Source Maps',
         'Transport Modes',
         'Country Caps',
         'Flow Map',
         'Assumptions',
-        'Strategic Dispatch',
+        '⚖️ Strategic Dispatch',
+        '🌍 H₂ Projects Pipeline',
     ])
 
     with tab1:
@@ -1725,6 +1951,26 @@ def main():
         st.caption('Median generation and transport cost across within-cap source points.')
 
     with tab3:
+        st.plotly_chart(
+            fig_emissions_breakdown(dfs_filtered, show_corridors, red3_threshold),
+            width="stretch",
+        )
+
+        if not summary_df.empty:
+            st.subheader('% of within-cap points below RED III threshold')
+            bar_data = summary_df[['Corridor', '% below RED III']].dropna()
+            if not bar_data.empty:
+                fig_pct = px.bar(
+                    bar_data, x='Corridor', y='% below RED III',
+                    color_discrete_sequence=['#2A9D8F'],
+                    text_auto='.1f',
+                )
+                fig_pct.add_hline(y=100, line_dash='dot', line_color='grey')
+                fig_pct.update_layout(yaxis_range=[0, 105], height=300,
+                                      plot_bgcolor='white')
+                st.plotly_chart(fig_pct, width="stretch")
+
+    with tab4:
         # ── Port selector (affects Total Cost, Transport Cost, Transport Mode maps) ──
         _port_keys  = list(PORT_OPTIONS.keys())
         _port_labels = list(PORT_OPTIONS.values())
@@ -1779,7 +2025,7 @@ def main():
                 )
         with _r2c2:
             st.plotly_chart(
-                fig_source_map(dfs_filtered, show_corridors,
+                fig_source_map(dfs_with_gen, show_corridors,
                                'Total Emissions (kgCO₂eq/kg)', height=380),
                 use_container_width=True,
             )
@@ -1795,7 +2041,7 @@ def main():
                 )
         with _r3c2:
             st.plotly_chart(
-                fig_source_map(dfs_filtered, show_corridors,
+                fig_source_map(dfs_with_gen, show_corridors,
                                'Cheaper Energy Source', height=380),
                 use_container_width=True,
             )
@@ -1807,7 +2053,7 @@ def main():
         with _r4c2:
             st.plotly_chart(fig_water_stress_map(height=380), use_container_width=True)
 
-    with tab4:
+    with tab5:
         c1, c2 = st.columns([1, 1])
         with c1:
             st.plotly_chart(
@@ -1828,7 +2074,7 @@ def main():
             if mode_rows:
                 st.dataframe(pd.DataFrame(mode_rows), hide_index=True)
 
-    with tab5:
+    with tab6:
         caps_df = _load_caps_df()
         if caps_df.empty:
             st.warning(
@@ -1861,7 +2107,7 @@ def main():
                 top20.columns = ['Country (ISO A3)', 'Capacity (kt H₂/yr)', 'Source']
                 st.dataframe(top20, hide_index=True, use_container_width=True)
 
-    with tab6:
+    with tab7:
         n_countries_flow = st.slider(
             'Top N source countries per corridor',
             min_value=5, max_value=30, value=15, step=1,
@@ -1877,7 +2123,7 @@ def main():
             'Dot colour = transport medium; dot size ∝ allocated volume.'
         )
 
-    with tab7:
+    with tab8:
         st.subheader('Technology Cost Assumptions')
         st.caption(
             'Global baseline CAPEX before regional adjustment. '
@@ -1911,7 +2157,7 @@ def main():
             use_container_width=True,
         )
 
-    with tab8:
+    with tab9:
         st.header('Strategic Multi-Criteria Dispatch')
         st.caption(
             'Adjust the objective weights to explore trade-offs between cost, energy security, '
@@ -2021,17 +2267,13 @@ def main():
         st.divider()
 
         # ── Radar chart + source map ──
+        _fig_strat_radar = fig_strategic_radar(_strat_kpis)
+        _fig_strat_map   = fig_strategic_source_map(_strat_disp, h2_demand_kt)
         col_r, col_m = st.columns(2)
         with col_r:
-            st.plotly_chart(
-                fig_strategic_radar(_strat_kpis),
-                use_container_width=True,
-            )
+            st.plotly_chart(_fig_strat_radar, use_container_width=True)
         with col_m:
-            st.plotly_chart(
-                fig_strategic_source_map(_strat_disp, h2_demand_kt),
-                use_container_width=True,
-            )
+            st.plotly_chart(_fig_strat_map, use_container_width=True)
 
         # ── Dispatch detail table ──
         if not _strat_disp.empty:
@@ -2058,6 +2300,351 @@ def main():
                     use_container_width=True,
                     hide_index=True,
                 )
+
+        # ── PDF export ──
+        st.divider()
+        st.subheader('Export Report')
+        st.caption('Capture current settings, KPIs, charts, and dispatch table as a PDF.')
+        if st.button('📄 Prepare PDF Report', key='strat_pdf_gen'):
+            with st.spinner('Rendering charts and building PDF…'):
+                try:
+                    _pdf_bytes = _generate_strategic_pdf(
+                        scenario=selected_scenario,
+                        year=selected_year,
+                        w_cost=w_cost,
+                        w_sec=w_sec,
+                        w_dep=w_dep,
+                        w_water=w_water,
+                        ref_cost_grey=float(ref_cost_grey),
+                        ref_emiss_grey=float(ref_emiss_grey),
+                        strat_cap_on=strat_cap_on,
+                        kpis=_strat_kpis,
+                        dispatch_df=_strat_disp,
+                        demand_kt=h2_demand_kt,
+                        fig_radar=_fig_strat_radar,
+                        fig_map=_fig_strat_map,
+                    )
+                    st.session_state['_strat_pdf_bytes'] = _pdf_bytes
+                    st.session_state['_strat_pdf_fname'] = (
+                        f'strategic_dispatch_{selected_scenario}_{selected_year}.pdf'
+                    )
+                except ImportError as _e:
+                    st.error(f'Missing dependency: {_e}')
+                    st.info('Install required packages: `pip install reportlab kaleido`')
+                except Exception as _e:
+                    st.error(f'PDF generation failed: {_e}')
+
+        if '_strat_pdf_bytes' in st.session_state:
+            st.download_button(
+                '⬇ Download PDF',
+                data=st.session_state['_strat_pdf_bytes'],
+                file_name=st.session_state.get('_strat_pdf_fname', 'strategic_dispatch.pdf'),
+                mime='application/pdf',
+                key='strat_pdf_dl',
+            )
+            st.caption('Re-generate after changing any settings above.')
+
+    with tab10:
+        st.header('Global Electrolytic H₂ Projects Pipeline')
+        st.caption(
+            'Source: IEA Hydrogen Production Projects database. '
+            'Capacity shown is announced/planned kt H₂/yr for electrolysis projects only. '
+            'Colour scale is logarithmic — each step is a 10× increase.'
+        )
+
+        _proj_df = load_h2_projects()
+
+        if _proj_df.empty:
+            st.error('`Data/Hydrogen Production Projects.xlsx` not found.')
+        else:
+            # ── Filters ──
+            _all_statuses = [s for s in _H2_STATUS_ORDER if s in _proj_df['Status'].unique()]
+            _default_statuses = [s for s in _all_statuses
+                                 if s in ('Operational', 'FID/Construction', 'DEMO',
+                                          'Feasibility study', 'Concept')]
+            _sel_statuses = st.multiselect(
+                'Project status filter',
+                options=_all_statuses,
+                default=_default_statuses,
+                key='proj_status_filter',
+                help='Include projects with these statuses. '
+                     'Deselect "Concept" to focus on more mature projects.',
+            )
+
+            # ── Top-level metrics ──
+            _sub_all = _proj_df[_proj_df['Status'].isin(_sel_statuses)].dropna(
+                subset=['Capacity_kt_H2_per_y']
+            ) if _sel_statuses else _proj_df.dropna(subset=['Capacity_kt_H2_per_y'])
+
+            _ded = _sub_all[_sub_all['Technology_electricity'] == 'Dedicated renewable']
+            _grid = _sub_all[_sub_all['Technology_electricity'] == 'Grid']
+            _grd_ren = _sub_all[_sub_all['Technology_electricity'] == 'Grid+Renewables']
+
+            _m1, _m2, _m3, _m4 = st.columns(4)
+            with _m1:
+                st.metric('Total capacity (all sources)',
+                          f'{_sub_all["Capacity_kt_H2_per_y"].sum()/1000:.1f} Mt H₂/yr',
+                          help='All electrolysis projects matching the status filter.')
+            with _m2:
+                st.metric('Dedicated renewables',
+                          f'{_ded["Capacity_kt_H2_per_y"].sum()/1000:.1f} Mt H₂/yr',
+                          help='Projects using only dedicated (off-grid) renewable electricity.')
+            with _m3:
+                st.metric('Grid electricity',
+                          f'{_grid["Capacity_kt_H2_per_y"].sum()/1000:.1f} Mt H₂/yr',
+                          help='Projects using grid electricity.')
+            with _m4:
+                st.metric('Grid + Renewables',
+                          f'{_grd_ren["Capacity_kt_H2_per_y"].sum()/1000:.1f} Mt H₂/yr',
+                          help='Projects combining grid and dedicated renewables.')
+
+            st.divider()
+
+            # ── The two choropleth maps ──
+            _map_col1, _map_col2 = st.columns(2)
+            with _map_col1:
+                st.subheader('Dedicated Renewables')
+                st.plotly_chart(
+                    fig_h2_pipeline_map(_proj_df, 'Dedicated renewable',
+                                        _sel_statuses, height=420),
+                    use_container_width=True,
+                )
+            with _map_col2:
+                st.subheader('Grid Electricity')
+                st.plotly_chart(
+                    fig_h2_pipeline_map(_proj_df, 'Grid',
+                                        _sel_statuses, height=420),
+                    use_container_width=True,
+                )
+
+            st.divider()
+
+            # ── Stacked bar: top countries across all sources ──
+            st.subheader('Top countries — capacity by electricity source')
+            _top_n = st.slider('Top N countries', min_value=10, max_value=40,
+                                value=20, step=5, key='proj_top_n')
+            st.plotly_chart(
+                fig_h2_pipeline_bar(_proj_df, _sel_statuses, top_n=_top_n, height=500),
+                use_container_width=True,
+            )
+
+            # ── Raw data table ──
+            with st.expander('Project data table', expanded=False):
+                _disp_cols = ['Project name', 'Country', 'Status', 'Technology',
+                               'Technology_electricity', 'Date online',
+                               'Capacity_kt_H2_per_y', 'Location']
+                _disp_cols = [c for c in _disp_cols if c in _proj_df.columns]
+                _tbl = _proj_df[_proj_df['Status'].isin(_sel_statuses)][_disp_cols].copy() \
+                    if _sel_statuses else _proj_df[_disp_cols].copy()
+                _tbl = _tbl.sort_values('Capacity_kt_H2_per_y', ascending=False)
+                _tbl.columns = [c.replace('Capacity_kt_H2_per_y', 'Capacity (kt H₂/yr)')
+                                  .replace('Technology_electricity', 'Electricity source')
+                                 for c in _tbl.columns]
+                st.dataframe(_tbl, use_container_width=True, hide_index=True)
+
+
+# ---------------------------------------------------------------------------
+# H₂ Projects Pipeline helpers
+# ---------------------------------------------------------------------------
+
+_H2_PROJ_COLS = [
+    'Ref', 'Project name', 'Country', 'Date online', 'Decomission date', 'Status',
+    'Technology', 'Technology_details', 'Technology_electricity',
+    'Technology_electricity_details', 'Product',
+    'EndUse_Refining', 'EndUse_Ammonia', 'EndUse_Methanol', 'EndUse_Iron&Steel',
+    'EndUse_Other Ind', 'EndUse_Mobility', 'EndUse_Power', 'EndUse_Grid inj.',
+    'EndUse_CHP', 'EndUse_Domestic heat', 'EndUse_Biofuels', 'EndUse_Synfuels',
+    'EndUse_CH4 grid inj.', 'EndUse_CH4 mobility',
+    'Announced Size', 'Capacity_MWel', 'Capacity_Nm3_H2_per_h',
+    'Capacity_kt_H2_per_y', 'Capacity_t_CO2_per_y',
+    'IEA_capacity_Nm3_H2_per_h', 'References', 'Location', 'Latitude', 'Longitude',
+]
+
+_H2_ELEC_TECHS = {'PEM', 'ALK', 'SOEC', 'Other Electrolysis', 'AEM', 'Electrolysis'}
+
+_H2_STATUS_ORDER = [
+    'Operational', 'FID/Construction', 'DEMO', 'Feasibility study', 'Concept',
+    'Various', 'Decommisioned',
+]
+
+_H2_ELEC_SOURCE_COLOURS = {
+    'Dedicated renewable': '#2A9D8F',
+    'Grid':                '#E63946',
+    'Grid+Renewables':     '#F4A261',
+    'Nuclear':             '#9B2335',
+    'Other/unknown':       '#aaaaaa',
+}
+
+
+@st.cache_data(show_spinner='Loading H₂ projects data…')
+def load_h2_projects() -> pd.DataFrame:
+    """Load IEA Hydrogen Production Projects database from the Excel file."""
+    path = 'Data/Hydrogen Production Projects.xlsx'
+    if not os.path.exists(path):
+        return pd.DataFrame()
+    df = pd.read_excel(path, sheet_name=0, skiprows=2)
+    df.columns = _H2_PROJ_COLS
+    # Normalise electricity source capitalisation
+    df['Technology_electricity'] = df['Technology_electricity'].str.strip()
+    df['Technology_electricity'] = df['Technology_electricity'].replace(
+        {'Other/Unknown': 'Other/unknown'}
+    )
+    # Keep only electrolysis projects with a country
+    df = df[df['Technology'].isin(_H2_ELEC_TECHS) & df['Country'].notna()].copy()
+    df['Capacity_kt_H2_per_y'] = pd.to_numeric(df['Capacity_kt_H2_per_y'], errors='coerce')
+    return df.reset_index(drop=True)
+
+
+def fig_h2_pipeline_map(
+    proj_df: pd.DataFrame,
+    elec_source: str,
+    statuses: list[str],
+    height: int = 420,
+) -> go.Figure:
+    """
+    Choropleth of total electrolytic H₂ production capacity (kt H₂/yr)
+    per country, filtered by electricity source and project status.
+    """
+    if proj_df.empty:
+        return go.Figure().update_layout(title='No project data found', height=height)
+
+    # Filter
+    mask = proj_df['Technology_electricity'] == elec_source
+    if statuses:
+        mask &= proj_df['Status'].isin(statuses)
+    sub = proj_df[mask].dropna(subset=['Capacity_kt_H2_per_y', 'Country'])
+
+    if sub.empty:
+        return go.Figure().update_layout(
+            title=f'No data — {elec_source} ({", ".join(statuses)})', height=height
+        )
+
+    by_country = (
+        sub.groupby('Country')['Capacity_kt_H2_per_y']
+        .sum()
+        .reset_index()
+        .rename(columns={'Country': 'ISO_A3', 'Capacity_kt_H2_per_y': 'capacity_kt'})
+    )
+    # Count projects per country for hover
+    proj_count = (
+        sub.groupby('Country').size()
+        .reset_index(name='n_projects')
+        .rename(columns={'Country': 'ISO_A3'})
+    )
+    by_country = by_country.merge(proj_count, on='ISO_A3', how='left')
+    by_country['capacity_Mt'] = (by_country['capacity_kt'] / 1000).round(3)
+
+    # Log scale for colour (many orders of magnitude across countries)
+    by_country['log_cap'] = np.log10(by_country['capacity_kt'].clip(lower=0.01))
+    log_max = float(np.ceil(by_country['log_cap'].max()))
+
+    # Build readable tick labels on log axis
+    tick_vals, tick_text = [], []
+    for exp in range(0, int(log_max) + 1):
+        tick_vals.append(exp)
+        tick_text.append(f'{10**exp:,.0f}' if exp < 4 else f'{10**exp/1000:,.0f}k')
+
+    colour = _H2_ELEC_SOURCE_COLOURS.get(elec_source, '#457B9D')
+    # Build a white→colour scale
+    colour_scale = [[0, '#f0f0f0'], [1, colour]]
+
+    status_label = ', '.join(statuses) if statuses else 'all statuses'
+    title = (
+        f'<b>{elec_source}</b> — electrolytic H₂ capacity by country<br>'
+        f'<sup>{status_label} | kt H₂/yr (log scale)</sup>'
+    )
+
+    fig = px.choropleth(
+        by_country,
+        locations='ISO_A3',
+        color='log_cap',
+        color_continuous_scale=colour_scale,
+        range_color=[0, log_max],
+        hover_name='ISO_A3',
+        hover_data={
+            'capacity_kt': ':,.1f',
+            'capacity_Mt': ':.3f',
+            'n_projects':  True,
+            'log_cap':     False,
+        },
+        labels={
+            'capacity_kt': 'kt H₂/yr',
+            'capacity_Mt': 'Mt H₂/yr',
+            'n_projects':  '# projects',
+        },
+        title=title,
+    )
+    fig.update_geos(**CHOROPLETH_GEO)
+    fig.update_layout(
+        paper_bgcolor='white',
+        margin=dict(l=0, r=0, t=60, b=0),
+        height=height,
+        coloraxis_colorbar=dict(
+            title='kt H₂/yr',
+            thickness=15,
+            len=0.6,
+            tickvals=tick_vals,
+            ticktext=tick_text,
+        ),
+    )
+    return fig
+
+
+def fig_h2_pipeline_bar(
+    proj_df: pd.DataFrame,
+    statuses: list[str],
+    top_n: int = 20,
+    height: int = 420,
+) -> go.Figure:
+    """
+    Stacked horizontal bar of top N countries by total electrolytic H₂ capacity,
+    split by electricity source.
+    """
+    if proj_df.empty:
+        return go.Figure()
+
+    sub = proj_df.copy()
+    if statuses:
+        sub = sub[sub['Status'].isin(statuses)]
+    sub = sub.dropna(subset=['Capacity_kt_H2_per_y', 'Country'])
+
+    # Aggregate per country × electricity source
+    grp = (
+        sub.groupby(['Country', 'Technology_electricity'])['Capacity_kt_H2_per_y']
+        .sum()
+        .reset_index()
+    )
+    total_by_country = grp.groupby('Country')['Capacity_kt_H2_per_y'].sum()
+    top_countries = total_by_country.nlargest(top_n).index.tolist()
+    grp = grp[grp['Country'].isin(top_countries)]
+
+    # Pivot for stacked bar
+    pivot = grp.pivot(index='Country', columns='Technology_electricity',
+                      values='Capacity_kt_H2_per_y').fillna(0)
+    pivot = pivot.loc[top_countries[::-1]]  # reverse so largest at top
+
+    fig = go.Figure()
+    for src in pivot.columns:
+        colour = _H2_ELEC_SOURCE_COLOURS.get(src, '#aaaaaa')
+        fig.add_trace(go.Bar(
+            name=src,
+            x=pivot[src],
+            y=pivot.index,
+            orientation='h',
+            marker_color=colour,
+            hovertemplate='%{y}: %{x:,.1f} kt H₂/yr<extra>' + src + '</extra>',
+        ))
+
+    fig.update_layout(
+        barmode='stack',
+        title=f'Top {top_n} countries — electrolytic H₂ capacity by electricity source',
+        xaxis_title='Capacity (kt H₂/yr)',
+        legend=dict(orientation='h', yanchor='bottom', y=1.01),
+        plot_bgcolor='white', paper_bgcolor='white',
+        height=height,
+        margin=dict(l=80, r=20, t=80, b=40),
+    )
+    return fig
 
 
 # ---------------------------------------------------------------------------
