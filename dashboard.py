@@ -1763,7 +1763,7 @@ def main():
                 )
         with _r1c2:
             st.plotly_chart(
-                fig_source_map(dfs_filtered, show_corridors,
+                fig_source_map(dfs_with_gen, show_corridors,
                                'Generation Cost (€/kg H₂)', height=380),
                 use_container_width=True,
             )
