@@ -436,36 +436,55 @@ def fig_supply_curve(results_with_country: dict, h2_demand_kt: float,
     return fig
 
 
-def fig_cost_breakdown(dfs_filtered: dict, show_corridors: list[str]) -> go.Figure:
-    """Stacked bar: median generation + transport cost per corridor (within-cap points)."""
-    labels, gen_costs, trans_costs = [], [], []
+def fig_cost_breakdown(dfs_filtered: dict, show_corridors: list[str], n_countries: int = 5) -> go.Figure:
+    """Subplots: stacked bar of gen + transport cost for the cheapest N countries per corridor."""
+    active = [cid for cid in show_corridors
+              if dfs_filtered.get(cid) is not None and not dfs_filtered[cid].empty]
+    if not active:
+        return go.Figure().update_layout(title='No data')
 
-    for cid in show_corridors:
-        df = dfs_filtered.get(cid)
-        if df is None or df.empty:
+    fig = make_subplots(
+        rows=1, cols=len(active),
+        subplot_titles=[f'Corridor {cid}' for cid in active],
+        shared_yaxes=True,
+    )
+
+    showlegend = True
+    for i, cid in enumerate(active, 1):
+        df = dfs_filtered[cid]
+        valid = df.dropna(subset=['Total Cost per kg H2', 'Gen. cost per kg H2',
+                                  'Transport Cost per kg H2'])
+        if 'Country' not in valid.columns or valid.empty:
             continue
-        labels.append(f'Corridor {cid}')
-        gen_costs.append(df['Gen. cost per kg H2'].median())
-        trans_costs.append(df['Transport Cost per kg H2'].median())
+        ctry = (valid.groupby('Country')
+                     .agg(gen_cost=('Gen. cost per kg H2', 'mean'),
+                          trans_cost=('Transport Cost per kg H2', 'mean'),
+                          total_cost=('Total Cost per kg H2', 'mean'))
+                     .sort_values('total_cost')
+                     .head(n_countries)
+                     .reset_index())
 
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        name='Generation', x=labels, y=gen_costs,
-        marker_color='#457B9D',
-        hovertemplate='Generation: %{y:.2f} €/kg H₂<extra></extra>',
-    ))
-    fig.add_trace(go.Bar(
-        name='Transport', x=labels, y=trans_costs,
-        marker_color='#E63946',
-        hovertemplate='Transport: %{y:.2f} €/kg H₂<extra></extra>',
-    ))
+        fig.add_trace(go.Bar(
+            name='Generation', x=ctry['Country'], y=ctry['gen_cost'],
+            marker_color='#457B9D',
+            hovertemplate='%{x}<br>Generation: %{y:.2f} €/kg H₂<extra></extra>',
+            legendgroup='gen', showlegend=showlegend,
+        ), row=1, col=i)
+        fig.add_trace(go.Bar(
+            name='Transport', x=ctry['Country'], y=ctry['trans_cost'],
+            marker_color='#E63946',
+            hovertemplate='%{x}<br>Transport: %{y:.2f} €/kg H₂<extra></extra>',
+            legendgroup='trans', showlegend=showlegend,
+        ), row=1, col=i)
+        showlegend = False
+
     fig.update_layout(
         barmode='stack',
-        title='Cost Breakdown — Median of Within-Cap Points',
+        title=f'Cost Breakdown — Cheapest {n_countries} Countries per Corridor',
         yaxis_title='Cost (€/kg H₂)',
         legend=dict(orientation='h', yanchor='bottom', y=1.02),
         plot_bgcolor='white',
-        height=400,
+        height=450,
     )
     return fig
 
@@ -1928,8 +1947,8 @@ def main():
         'Country Caps',
         'Flow Map',
         'Assumptions',
-        '⚖️ Strategic Dispatch',
-        '🌍 H₂ Projects Pipeline',
+        'Strategic Dispatch',
+        'H₂ Projects Pipeline',
     ])
 
     with tab1:
@@ -2305,7 +2324,7 @@ def main():
         st.divider()
         st.subheader('Export Report')
         st.caption('Capture current settings, KPIs, charts, and dispatch table as a PDF.')
-        if st.button('📄 Prepare PDF Report', key='strat_pdf_gen'):
+        if st.button('Prepare PDF Report', key='strat_pdf_gen'):
             with st.spinner('Rendering charts and building PDF…'):
                 try:
                     _pdf_bytes = _generate_strategic_pdf(
@@ -2336,7 +2355,7 @@ def main():
 
         if '_strat_pdf_bytes' in st.session_state:
             st.download_button(
-                '⬇ Download PDF',
+                'Download PDF',
                 data=st.session_state['_strat_pdf_bytes'],
                 file_name=st.session_state.get('_strat_pdf_fname', 'strategic_dispatch.pdf'),
                 mime='application/pdf',
