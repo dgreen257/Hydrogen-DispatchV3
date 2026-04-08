@@ -571,7 +571,7 @@ def fig_source_map(dfs_filtered: dict, show_corridors: list[str],
             title=f'Source Locations — {metric}',
         )
     else:
-        p_hi = combined[col].quantile(0.95)
+        p_hi = combined[col].quantile(0.97 if 'Gen' in col else 0.95)
         fig = px.scatter_geo(
             combined, lat='Latitude', lon='Longitude',
             color=col,
@@ -631,7 +631,7 @@ def fig_port_source_map(df: pd.DataFrame, metric: str, port_label: str,
             title=title,
         )
     else:
-        p_hi = plot_df[col].quantile(0.95)
+        p_hi = plot_df[col].quantile(0.90 if 'Transport' in col else 0.95)
         fig = px.scatter_geo(
             plot_df, lat='Latitude', lon='Longitude',
             color=col,
