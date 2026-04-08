@@ -4,12 +4,12 @@ dashboard.py
 Interactive Streamlit dashboard for the H2-Mapping corridor model.
 
 Reads pre-computed Results/corridor_A_{year}.csv … corridor_E_{year}.csv and
-renders five interactive views:
+renders interactive views:
   1. Supply curve  — cumulative capacity vs cost, per corridor
   2. Cost breakdown  — gen vs transport cost, median of within-cap points
-  3. Emissions breakdown  — gen vs transport emissions, median of within-cap points
-  4. Source map  — scatter globe of supply locations coloured by cost/emissions
-  5. Transport modes — pie chart + breakdown table
+  3. Source maps  — scatter globe of supply locations coloured by cost / mode / source
+  4. Transport modes — pie chart + breakdown table
+  5. Country caps, Flow map, Assumptions, Strategic Dispatch, H₂ Projects Pipeline
 
 Sidebar controls (no model re-run required):
   - Year: auto-detected from available CSVs in Results/
@@ -1589,18 +1589,15 @@ def fig_capex_assumptions(selected_year: int, elec_type: str = 'alkaline') -> go
 
 
 def fig_regional_factors_dash() -> go.Figure:
-    """Bar chart of solar/wind CAPEX multipliers and WACC per H2_Region."""
+    """Bar chart of solar/wind CAPEX multipliers per H2_Region."""
     regions = _REGION_ORDER_DIAG
     solar_f = [SOLAR_CAPEX_FACTOR.get(r, 1.0) for r in regions]
     wind_f  = [WIND_CAPEX_FACTOR.get(r, 1.0)  for r in regions]
-    wacc_v  = [WACC.get(r, 0.09) * 100         for r in regions]
-    # Electrolyser WACC ≈ renewable WACC + 2% technology risk premium (from CSV data)
-    wacc_elec_v = [v + 2.0 for v in wacc_v]
 
     fig = make_subplots(
-        rows=1, cols=3,
-        subplot_titles=('Solar CAPEX factor (× baseline)', 'Wind CAPEX factor (× baseline)', 'WACC (%) — Renewable / Electrolyser'),
-        horizontal_spacing=0.08,
+        rows=1, cols=2,
+        subplot_titles=('Solar CAPEX factor (× baseline)', 'Wind CAPEX factor (× baseline)'),
+        horizontal_spacing=0.10,
     )
     for col, vals, colour in [
         (1, solar_f, '#E69F00'),
@@ -1609,24 +1606,62 @@ def fig_regional_factors_dash() -> go.Figure:
         fig.add_trace(go.Bar(
             x=regions, y=vals, marker_color=colour, opacity=0.85, showlegend=False,
         ), row=1, col=col)
-    # WACC: two series — renewable (teal) and electrolyser (orange-red)
-    fig.add_trace(go.Bar(
-        x=regions, y=wacc_v, name='Renewable WACC',
-        marker_color='#2A9D8F', opacity=0.85,
-    ), row=1, col=3)
-    fig.add_trace(go.Bar(
-        x=regions, y=wacc_elec_v, name='Electrolyser WACC',
-        marker_color='#E76F51', opacity=0.85,
-    ), row=1, col=3)
-    for col in [1, 2]:
         fig.add_hline(y=1.0, line_dash='dot', line_color='grey', row=1, col=col)
-    fig.add_hline(y=8.0, line_dash='dot', line_color='grey', row=1, col=3)
 
     fig.update_xaxes(tickangle=45)
     fig.update_layout(
-        title='<b>Regional CAPEX multipliers and WACC</b>',
+        title='<b>Regional CAPEX multipliers</b>',
         plot_bgcolor='white', paper_bgcolor='white', font=dict(size=11),
-        height=380, barmode='group', legend=dict(x=0.72, y=1.12, orientation='h'),
+        height=380,
+    )
+    return fig
+
+
+def fig_wacc_maps() -> go.Figure:
+    """Side-by-side choropleth maps of WACC by country for each technology."""
+    ren_iso  = list(WACC_COUNTRY_REN.keys())
+    ren_vals = [v * 100 for v in WACC_COUNTRY_REN.values()]
+    elec_iso  = list(WACC_COUNTRY_ELEC.keys())
+    elec_vals = [v * 100 for v in WACC_COUNTRY_ELEC.values()]
+
+    shared_range = [0, max(max(ren_vals, default=0), max(elec_vals, default=0))]
+
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=('Renewable WACC — Solar & Wind (%)', 'Electrolyser WACC (%)'),
+        specs=[[{'type': 'choropleth'}, {'type': 'choropleth'}]],
+        horizontal_spacing=0.02,
+    )
+
+    for col, iso_list, vals, title in [
+        (1, ren_iso,  ren_vals,  'Ren. WACC (%)'),
+        (2, elec_iso, elec_vals, 'Elec. WACC (%)'),
+    ]:
+        fig.add_trace(go.Choropleth(
+            locations=iso_list,
+            z=vals,
+            locationmode='ISO-3',
+            colorscale='RdYlGn_r',
+            zmin=shared_range[0],
+            zmax=shared_range[1],
+            colorbar=dict(title=title, len=0.7, thickness=12,
+                          x=0.48 if col == 1 else 1.0),
+            hovertemplate='<b>%{location}</b><br>WACC: %{z:.1f}%<extra></extra>',
+            showscale=True,
+        ), row=1, col=col)
+
+    fig.update_geos(
+        showland=True, landcolor='#f5f5f5',
+        showocean=True, oceancolor='#d0e8f5',
+        showframe=False, showcoastlines=True, coastlinecolor='#aaaaaa',
+        projection_type='natural earth',
+        lataxis_range=[-60, 90],
+    )
+    fig.update_layout(
+        title='<b>WACC by country and technology</b>',
+        paper_bgcolor='white', font=dict(size=11),
+        height=420,
+        margin=dict(l=0, r=0, t=60, b=0),
     )
     return fig
 
@@ -1938,10 +1973,9 @@ def main():
     st.divider()
 
     # ── Main charts ──────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
         'Supply Curve',
         'Cost Breakdown',
-        'Emissions',
         'Source Maps',
         'Transport Modes',
         'Country Caps',
@@ -1970,26 +2004,6 @@ def main():
         st.caption('Median generation and transport cost across within-cap source points.')
 
     with tab3:
-        st.plotly_chart(
-            fig_emissions_breakdown(dfs_filtered, show_corridors, red3_threshold),
-            width="stretch",
-        )
-
-        if not summary_df.empty:
-            st.subheader('% of within-cap points below RED III threshold')
-            bar_data = summary_df[['Corridor', '% below RED III']].dropna()
-            if not bar_data.empty:
-                fig_pct = px.bar(
-                    bar_data, x='Corridor', y='% below RED III',
-                    color_discrete_sequence=['#2A9D8F'],
-                    text_auto='.1f',
-                )
-                fig_pct.add_hline(y=100, line_dash='dot', line_color='grey')
-                fig_pct.update_layout(yaxis_range=[0, 105], height=300,
-                                      plot_bgcolor='white')
-                st.plotly_chart(fig_pct, width="stretch")
-
-    with tab4:
         # ── Port selector (affects Total Cost, Transport Cost, Transport Mode maps) ──
         _port_keys  = list(PORT_OPTIONS.keys())
         _port_labels = list(PORT_OPTIONS.values())
@@ -2033,19 +2047,11 @@ def main():
                 use_container_width=True,
             )
 
-        # Row 2: Transport Cost (port) | Total Emissions (corridor)
-        _r2c1, _r2c2 = st.columns(2)
-        with _r2c1:
-            if not _port_df.empty:
-                st.plotly_chart(
-                    fig_port_source_map(_port_df, 'Transport Cost (€/kg H₂)',
-                                        _selected_port_label, height=380),
-                    use_container_width=True,
-                )
-        with _r2c2:
+        # Row 2: Transport Cost (port)
+        if not _port_df.empty:
             st.plotly_chart(
-                fig_source_map(dfs_with_gen, show_corridors,
-                               'Total Emissions (kgCO₂eq/kg)', height=380),
+                fig_port_source_map(_port_df, 'Transport Cost (€/kg H₂)',
+                                    _selected_port_label, height=380),
                 use_container_width=True,
             )
 
@@ -2072,7 +2078,7 @@ def main():
         with _r4c2:
             st.plotly_chart(fig_water_stress_map(height=380), use_container_width=True)
 
-    with tab5:
+    with tab4:
         c1, c2 = st.columns([1, 1])
         with c1:
             st.plotly_chart(
@@ -2093,7 +2099,7 @@ def main():
             if mode_rows:
                 st.dataframe(pd.DataFrame(mode_rows), hide_index=True)
 
-    with tab6:
+    with tab5:
         caps_df = _load_caps_df()
         if caps_df.empty:
             st.warning(
@@ -2126,7 +2132,7 @@ def main():
                 top20.columns = ['Country (ISO A3)', 'Capacity (kt H₂/yr)', 'Source']
                 st.dataframe(top20, hide_index=True, use_container_width=True)
 
-    with tab7:
+    with tab6:
         n_countries_flow = st.slider(
             'Top N source countries per corridor',
             min_value=5, max_value=30, value=15, step=1,
@@ -2142,7 +2148,7 @@ def main():
             'Dot colour = transport medium; dot size ∝ allocated volume.'
         )
 
-    with tab8:
+    with tab7:
         st.subheader('Technology Cost Assumptions')
         st.caption(
             'Global baseline CAPEX before regional adjustment. '
@@ -2167,6 +2173,15 @@ def main():
         st.plotly_chart(fig_regional_factors_dash(), use_container_width=True)
 
         st.divider()
+        st.subheader('WACC by Country and Technology')
+        st.caption(
+            'Weighted average cost of capital (%) used to annualise CAPEX for each technology. '
+            'Renewable WACC applies to solar and wind; electrolyser WACC carries an additional '
+            'technology risk premium (~2%).'
+        )
+        st.plotly_chart(fig_wacc_maps(), use_container_width=True)
+
+        st.divider()
         st.subheader('Generation Cost by Region (current selection)')
         st.caption(
             'Mean gen. cost per region across within-cap grid points, split by component.'
@@ -2176,7 +2191,7 @@ def main():
             use_container_width=True,
         )
 
-    with tab9:
+    with tab8:
         st.header('Strategic Multi-Criteria Dispatch')
         st.caption(
             'Adjust the objective weights to explore trade-offs between cost, energy security, '
@@ -2363,7 +2378,7 @@ def main():
             )
             st.caption('Re-generate after changing any settings above.')
 
-    with tab10:
+    with tab9:
         st.header('Global Electrolytic H₂ Projects Pipeline')
         st.caption(
             'Source: IEA Hydrogen Production Projects database. '
