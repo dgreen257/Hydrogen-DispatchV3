@@ -1,7 +1,7 @@
 import math
 
 import pandas as pd
-from country_factors import SOLAR_CAPEX_FACTOR, WIND_CAPEX_FACTOR, WACC
+from country_factors import SOLAR_CAPEX_FACTOR, WIND_CAPEX_FACTOR, WACC, WACC_COUNTRY_REN, WACC_COUNTRY_ELEC
 
 # Offshore wind CAPEX multiplier relative to the onshore global baseline.
 # Fixed-bottom offshore installation is ~2.5× onshore due to foundations,
@@ -174,11 +174,18 @@ def generation_costs(df_ren, h2_demand, year=2020, elec_type='alkaline',
     if location_adjusted and 'H2_Region' in df_ren.columns:
         solar_factor = df_ren['H2_Region'].map(SOLAR_CAPEX_FACTOR).fillna(1.0)
         wind_factor  = df_ren['H2_Region'].map(WIND_CAPEX_FACTOR).fillna(1.0)
-        wacc         = df_ren['H2_Region'].map(WACC).fillna(0.08)
+        if 'ISO_A3' in df_ren.columns:
+            region_wacc = df_ren['H2_Region'].map(WACC)
+            wacc_ren  = df_ren['ISO_A3'].map(WACC_COUNTRY_REN).fillna(region_wacc).fillna(0.08)
+            wacc_elec = df_ren['ISO_A3'].map(WACC_COUNTRY_ELEC).fillna(region_wacc + 0.02).fillna(0.10)
+        else:
+            wacc_ren  = df_ren['H2_Region'].map(WACC).fillna(0.08)
+            wacc_elec = wacc_ren + 0.02
     else:
         solar_factor = 1.0
         wind_factor  = 1.0
-        wacc         = 0.08   # flat global fallback
+        wacc_ren  = 0.08   # flat global fallback
+        wacc_elec = 0.10
 
     capex_solar = capex_solar_global * solar_factor   # [EUR/kWp] per row
 
@@ -203,7 +210,7 @@ def generation_costs(df_ren, h2_demand, year=2020, elec_type='alkaline',
     # Solar Energy Potential column: kWh/kWp/yr (location-specific yield)
     df_ren['Solar Array Size']  = elec_demand_yearly * 1000 / df_ren['Solar Energy Potential']  # [kWp]
     df_ren['Solar CapEx']       = df_ren['Solar Array Size'] * capex_solar                       # [EUR]
-    df_ren['Yearly Cost Solar'] = (annualise(df_ren['Solar CapEx'], wacc, 25)
+    df_ren['Yearly Cost Solar'] = (annualise(df_ren['Solar CapEx'], wacc_ren, 25)
                                    + opex_factor_solar * df_ren['Solar CapEx'])                  # [EUR/yr]
     df_ren['Elec Cost Solar']   = df_ren['Yearly Cost Solar'] / elec_demand_yearly              # [EUR/MWh]
 
@@ -222,7 +229,7 @@ def generation_costs(df_ren, h2_demand, year=2020, elec_type='alkaline',
                                     * (blade ** 2) * math.pi / 1e6)                              # [MW/turbine]
     df_ren['No. of Turbines']    = elec_demand / df_ren['Wind Turbine Power']
     df_ren['Wind CapEx']         = df_ren['No. of Turbines'] * capex_turbine                     # [EUR]
-    df_ren['Yearly Cost Wind']   = (annualise(df_ren['Wind CapEx'], wacc, 20)
+    df_ren['Yearly Cost Wind']   = (annualise(df_ren['Wind CapEx'], wacc_ren, 20)
                                     + opex_wind * elec_demand_yearly)                            # [EUR/yr]
     df_ren['Elec Cost Wind']     = df_ren['Yearly Cost Wind'] / elec_demand_yearly              # [EUR/MWh]
 
@@ -235,7 +242,7 @@ def generation_costs(df_ren, h2_demand, year=2020, elec_type='alkaline',
     # ------------------------------------------------------------------
     # Stack + electrical BOP + compression vessel — all correctly annualised via CRF
     total_capex_h2 = (capex_h2_global + other_capex_elec + compression_capex_per_kw) * elec_demand * 1000   # [EUR]
-    df_ren['Yearly Cost Electrolyser'] = (annualise(total_capex_h2, wacc, electrolyser_lifetime)
+    df_ren['Yearly Cost Electrolyser'] = (annualise(total_capex_h2, wacc_elec, electrolyser_lifetime)
                                           + elec_opex * total_capex_h2
                                           + water_cost * h2_demand * 1e6)                        # [EUR/yr]
 

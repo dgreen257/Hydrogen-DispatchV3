@@ -101,7 +101,7 @@ def aggregate_country_supply(df: pd.DataFrame, caps: dict,
 
     return result
 from generation_costs import global_capex
-from country_factors import SOLAR_CAPEX_FACTOR, WIND_CAPEX_FACTOR, WACC
+from country_factors import SOLAR_CAPEX_FACTOR, WIND_CAPEX_FACTOR, WACC, WACC_COUNTRY_REN, WACC_COUNTRY_ELEC
 from plotly.subplots import make_subplots
 
 GEO_LAYOUT = dict(
