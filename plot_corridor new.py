@@ -1072,7 +1072,7 @@ def plot_cost_component_breakdown(results: dict, h2_demand: float = 15_000,
     electricity (4 kWh/kg) flows through the renewable sizing block, so
     it is captured in the Electricity bar — not double-counted here.
     """
-    from country_factors import WACC as WACC_MAP
+    from country_factors import WACC as WACC_MAP, WACC_COUNTRY_ELEC
     from generation_costs import annualise
 
     year_diff                = max(0, min(30, year - 2020))
@@ -1111,7 +1111,9 @@ def plot_cost_component_breakdown(results: dict, h2_demand: float = 15_000,
 
         row = within.loc[within['Total Cost per kg H2'].idxmin()]
 
-        wacc         = WACC_MAP.get(row.get('H2_Region', 'Other'), 0.09)
+        iso          = row.get('ISO_A3', '')
+        wacc         = (WACC_COUNTRY_ELEC.get(iso)
+                        or WACC_MAP.get(row.get('H2_Region', 'Other'), 0.09))
         yearly_solar = row['Yearly Cost Solar']
         yearly_wind  = row['Yearly Cost Wind']
         elec_per_kg  = min(yearly_solar, yearly_wind) / kg_per_yr
