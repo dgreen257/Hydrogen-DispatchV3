@@ -950,9 +950,9 @@ def _compute_strategic_kpis(
     radar_diversification = float(np.clip(1.0 - hhi, 0.0, 1.0))
     radar_water           = float(np.clip(1.0 - weighted_water / 5.0, 0.0, 1.0))
 
-    # Carbon: total carbon avoided normalised against 250 Mt CO₂ fixed cap
-    # 0 → 0 Mt avoided, 1.0 → ≥250 Mt avoided (same scale across all scenarios)
-    _CARBON_CAP_KT = 250_000.0  # 250 Mt CO₂
+    # Carbon: total carbon avoided normalised against 200 Mt CO₂ fixed cap
+    # 0 → 0 Mt avoided, 1.0 → ≥200 Mt avoided (same scale across all scenarios)
+    _CARBON_CAP_KT = 200_000.0  # 200 Mt CO₂
     if pd.notna(total_carbon_avoided):
         radar_carbon = float(np.clip(total_carbon_avoided / _CARBON_CAP_KT, 0.0, 1.0))
     else:
