@@ -933,19 +933,14 @@ def _compute_strategic_kpis(
     hhi               = float((weights ** 2).sum())
     n_countries       = int((dispatch_df['allocated_kt'] > 1e-3).sum())
 
-    # Total carbon avoided [kt CO₂] = emissions saved per kg H₂ × demand (not allocated)
-    # Using demand_kt ensures the metric is anchored to demand, not allocation completeness,
-    # so it is uniform across scenarios and responds only to portfolio emissions intensity.
-    if pd.notna(delivered_emissions):
-        emiss_saved = ref_emissions_grey - delivered_emissions  # kgCO₂/kgH₂ = ktCO₂/ktH₂
-        total_carbon_avoided = float(emiss_saved * demand_kt) if emiss_saved > 0 else 0.0
-    else:
-        emiss_saved = np.nan
-        total_carbon_avoided = np.nan
+    # Total carbon avoided [kt CO₂] = grey baseline emissions × demand
+    # Assumes green H₂ is zero-emission; depends only on demand and the grey reference,
+    # never on portfolio composition or objective weightings — gives 3 values per year.
+    total_carbon_avoided = float(ref_emissions_grey * demand_kt)
 
     # Radar normalisation (0–1, higher = better)
-    # Cost: 3.00 €/kg → 1.0 (best), 5.00 €/kg → 0.0 (worst)
-    radar_cost            = float(np.clip(1.0 - (delivered_cost - 3.00) / 2.0, 0.0, 1.0))
+    # Cost: 3.00 €/kg → 1.0 (best), 4.50 €/kg → 0.0 (worst)
+    radar_cost            = float(np.clip(1.0 - (delivered_cost - 3.00) / 1.5, 0.0, 1.0))
     radar_security        = float(np.clip(weighted_security / 100.0, 0.0, 1.0))
     radar_diversification = float(np.clip(1.0 - hhi, 0.0, 1.0))
     radar_water           = float(np.clip(1.0 - weighted_water / 5.0, 0.0, 1.0))
@@ -953,10 +948,7 @@ def _compute_strategic_kpis(
     # Carbon: total carbon avoided normalised against 200 Mt CO₂ fixed cap
     # 0 → 0 Mt avoided, 1.0 → ≥200 Mt avoided (same scale across all scenarios)
     _CARBON_CAP_KT = 200_000.0  # 200 Mt CO₂
-    if pd.notna(total_carbon_avoided):
-        radar_carbon = float(np.clip(total_carbon_avoided / _CARBON_CAP_KT, 0.0, 1.0))
-    else:
-        radar_carbon = 0.0
+    radar_carbon = float(np.clip(total_carbon_avoided / _CARBON_CAP_KT, 0.0, 1.0))
 
     return {
         'delivered_cost':        delivered_cost,
