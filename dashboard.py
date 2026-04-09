@@ -944,8 +944,8 @@ def _compute_strategic_kpis(
         total_carbon_avoided = np.nan
 
     # Radar normalisation (0–1, higher = better)
-    # Cost: 2.50 €/kg → 1.0 (best), 4.50 €/kg → 0.0 (worst)
-    radar_cost            = float(np.clip(1.0 - (delivered_cost - 2.50) / 2.0, 0.0, 1.0))
+    # Cost: 3.00 €/kg → 1.0 (best), 5.00 €/kg → 0.0 (worst)
+    radar_cost            = float(np.clip(1.0 - (delivered_cost - 3.00) / 2.0, 0.0, 1.0))
     radar_security        = float(np.clip(weighted_security / 100.0, 0.0, 1.0))
     radar_diversification = float(np.clip(1.0 - hhi, 0.0, 1.0))
     radar_water           = float(np.clip(1.0 - weighted_water / 5.0, 0.0, 1.0))
