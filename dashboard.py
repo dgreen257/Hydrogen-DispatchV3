@@ -933,10 +933,12 @@ def _compute_strategic_kpis(
     hhi               = float((weights ** 2).sum())
     n_countries       = int((dispatch_df['allocated_kt'] > 1e-3).sum())
 
-    # Total carbon avoided [kt CO₂] = emissions saved per kg H₂ × total kt H₂
+    # Total carbon avoided [kt CO₂] = emissions saved per kg H₂ × demand (not allocated)
+    # Using demand_kt ensures the metric is anchored to demand, not allocation completeness,
+    # so it is uniform across scenarios and responds only to portfolio emissions intensity.
     if pd.notna(delivered_emissions):
         emiss_saved = ref_emissions_grey - delivered_emissions  # kgCO₂/kgH₂ = ktCO₂/ktH₂
-        total_carbon_avoided = float(emiss_saved * total) if emiss_saved > 0 else 0.0
+        total_carbon_avoided = float(emiss_saved * demand_kt) if emiss_saved > 0 else 0.0
     else:
         emiss_saved = np.nan
         total_carbon_avoided = np.nan
