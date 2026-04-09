@@ -906,14 +906,13 @@ def _build_strategic_dispatch(
 def _compute_strategic_kpis(
     dispatch_df: pd.DataFrame,
     demand_kt: float,
-    ref_cost_grey: float = 1.50,
     ref_emissions_grey: float = 9.0,
 ) -> dict:
     """Compute KPIs from a strategic dispatch result."""
     _empty = {
         'delivered_cost': np.nan, 'delivered_emissions': np.nan,
         'weighted_security': np.nan, 'hhi': np.nan,
-        'weighted_water': np.nan, 'carbon_avoided_cost': np.nan,
+        'weighted_water': np.nan, 'total_carbon_avoided': np.nan,
         'n_countries': 0,
         'radar_cost': 0.0, 'radar_security': 0.0, 'radar_diversification': 0.0,
         'radar_water': 0.0, 'radar_carbon': 0.0,
@@ -934,24 +933,24 @@ def _compute_strategic_kpis(
     hhi               = float((weights ** 2).sum())
     n_countries       = int((dispatch_df['allocated_kt'] > 1e-3).sum())
 
-    # Cost of carbon avoided [€/tCO₂]
+    # Total carbon avoided [kt CO₂] = emissions saved per kg H₂ × total kt H₂
     if pd.notna(delivered_emissions):
-        emiss_saved = ref_emissions_grey - delivered_emissions
-        carbon_avoided_cost = (
-            (delivered_cost - ref_cost_grey) / emiss_saved * 1000
-            if emiss_saved > 1e-6 else np.nan
-        )
+        emiss_saved = ref_emissions_grey - delivered_emissions  # kgCO₂/kgH₂ = ktCO₂/ktH₂
+        total_carbon_avoided = float(emiss_saved * total) if emiss_saved > 0 else 0.0
     else:
-        carbon_avoided_cost = np.nan
+        emiss_saved = np.nan
+        total_carbon_avoided = np.nan
 
     # Radar normalisation (0–1, higher = better)
-    radar_cost            = float(np.clip(1.0 - (delivered_cost - 0.5) / 5.0, 0.0, 1.0))
+    # Cost: 2.50 €/kg → 1.0 (best), 4.50 €/kg → 0.0 (worst)
+    radar_cost            = float(np.clip(1.0 - (delivered_cost - 2.50) / 2.0, 0.0, 1.0))
     radar_security        = float(np.clip(weighted_security / 100.0, 0.0, 1.0))
     radar_diversification = float(np.clip(1.0 - hhi, 0.0, 1.0))
     radar_water           = float(np.clip(1.0 - weighted_water / 5.0, 0.0, 1.0))
 
-    if pd.notna(carbon_avoided_cost):
-        radar_carbon = 1.0 if carbon_avoided_cost <= 0 else float(np.clip(1.0 - carbon_avoided_cost / 500.0, 0.0, 1.0))
+    # Carbon: fraction of grey baseline emissions avoided (0 → same as grey, 1 → fully decarbonised)
+    if pd.notna(emiss_saved) and ref_emissions_grey > 1e-6:
+        radar_carbon = float(np.clip(emiss_saved / ref_emissions_grey, 0.0, 1.0))
     else:
         radar_carbon = 0.0
 
@@ -961,7 +960,7 @@ def _compute_strategic_kpis(
         'weighted_security':     weighted_security,
         'hhi':                   hhi,
         'weighted_water':        weighted_water,
-        'carbon_avoided_cost':   carbon_avoided_cost,
+        'total_carbon_avoided':  total_carbon_avoided,
         'n_countries':           n_countries,
         'radar_cost':            radar_cost,
         'radar_security':        radar_security,
@@ -977,19 +976,20 @@ def fig_strategic_radar(kpis: dict, height: int = 420) -> go.Figure:
     sec = kpis.get('weighted_security', np.nan)
     hhi = kpis.get('hhi', np.nan)
     bws = kpis.get('weighted_water', np.nan)
-    ca  = kpis.get('carbon_avoided_cost', np.nan)
+    tca = kpis.get('total_carbon_avoided', np.nan)  # kt CO₂
 
     def _fmt(val, fmt, fallback='N/A'):
         return fmt.format(val) if pd.notna(val) else fallback
 
     div_val = (1.0 - hhi) if pd.notna(hhi) else np.nan
+    tca_mt  = tca / 1000 if pd.notna(tca) else np.nan  # convert to Mt CO₂ for display
 
     categories = [
         f"Cost Score<br>({_fmt(dc, '{:.2f} €/kg')})",
         f"Security<br>(CPI: {_fmt(sec, '{:.0f}')})",
         f"Diversification<br>(1−HHI: {_fmt(div_val, '{:.2f}')})",
         f"Water Access<br>(BWS: {_fmt(bws, '{:.2f}')})",
-        f"Carbon Avoided<br>({_fmt(ca, '{:.0f} €/tCO₂')})",
+        f"Carbon Avoided<br>({_fmt(tca_mt, '{:.2f} MtCO₂')})",
     ]
 
     values = [
@@ -1189,17 +1189,17 @@ def _generate_strategic_pdf(
     hhi_val = kpis.get('hhi', np.nan)
     div_val = (1.0 - hhi_val) if pd.notna(hhi_val) else np.nan
     bws_val = kpis.get('weighted_water', np.nan)
-    ca_val  = kpis.get('carbon_avoided_cost', np.nan)
+    ca_val  = kpis.get('total_carbon_avoided', np.nan)  # kt CO₂
     n_c     = kpis.get('n_countries', 0)
     tot_alloc_kt = dispatch_df['allocated_kt'].sum() if not dispatch_df.empty else 0
 
-    kpi_headers = ['Delivered Cost', 'Security (CPI)', 'Diversification (1−HHI)', 'Water Stress (BWS)', 'Carbon Avoided Cost']
+    kpi_headers = ['Delivered Cost', 'Security (CPI)', 'Diversification (1−HHI)', 'Water Stress (BWS)', 'Total Carbon Avoided']
     kpi_values  = [
-        f'{dc:.3f} €/kg'        if pd.notna(dc)      else '—',
-        f'{sec_val:.0f} / 100'  if pd.notna(sec_val) else '—',
-        f'{div_val:.3f}'        if pd.notna(div_val) else '—',
-        f'{bws_val:.2f} / 5.0' if pd.notna(bws_val) else '—',
-        f'{ca_val:.0f} €/tCO₂' if pd.notna(ca_val)  else 'N/A',
+        f'{dc:.3f} €/kg'              if pd.notna(dc)      else '—',
+        f'{sec_val:.0f} / 100'        if pd.notna(sec_val) else '—',
+        f'{div_val:.3f}'              if pd.notna(div_val) else '—',
+        f'{bws_val:.2f} / 5.0'        if pd.notna(bws_val) else '—',
+        f'{ca_val / 1000:.2f} Mt CO₂' if pd.notna(ca_val)  else 'N/A',
     ]
     kpi_cw  = usable_w / 5
     kpi_tbl = Table([kpi_headers, kpi_values], colWidths=[kpi_cw] * 5)
@@ -2251,7 +2251,7 @@ def main():
             _strat_ctry, h2_demand_kt, w_cost, w_sec, w_dep, w_water
         )
         _strat_kpis = _compute_strategic_kpis(
-            _strat_disp, h2_demand_kt, float(ref_cost_grey), float(ref_emiss_grey)
+            _strat_disp, h2_demand_kt, float(ref_emiss_grey)
         )
 
         # ── Charts in right column: map on top, radar below ──
@@ -2267,13 +2267,10 @@ def main():
         hhi_val = _strat_kpis.get('hhi', np.nan)
         div_val = (1.0 - hhi_val) if pd.notna(hhi_val) else np.nan
         bws_val = _strat_kpis.get('weighted_water', np.nan)
-        ca_val  = _strat_kpis.get('carbon_avoided_cost', np.nan)
+        ca_val  = _strat_kpis.get('total_carbon_avoided', np.nan)  # kt CO₂
         n_c       = _strat_kpis.get('n_countries', 0)
         tot_alloc = _strat_disp['allocated_kt'].sum() if not _strat_disp.empty else 0
-        if pd.notna(ca_val):
-            ca_str = f'{ca_val:.0f} €/tCO₂' if ca_val > 0 else f'{ca_val:.0f} €/tCO₂ (premium-free)'
-        else:
-            ca_str = 'N/A'
+        ca_str = f'{ca_val / 1000:.2f} Mt CO₂/yr' if pd.notna(ca_val) else 'N/A'
         with left_col:
             st.subheader('Dispatch Summary')
             st.markdown(
@@ -2284,7 +2281,7 @@ def main():
                 f'- **Security (CPI):** {"—" if pd.isna(sec_val) else f"{sec_val:.0f} / 100"}\n'
                 f'- **Diversification (1−HHI):** {"—" if pd.isna(div_val) else f"{div_val:.3f}"}\n'
                 f'- **Water stress (BWS):** {"—" if pd.isna(bws_val) else f"{bws_val:.2f} / 5.0"}\n'
-                f'- **Carbon avoided cost:** {ca_str}'
+                f'- **Total carbon avoided:** {ca_str}'
             )
             st.divider()
             st.subheader('Carbon Reference')
