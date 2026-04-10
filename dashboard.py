@@ -926,6 +926,7 @@ def _compute_strategic_kpis(
     dispatch_df: pd.DataFrame,
     demand_kt: float,
     ref_emissions_grey: float = 9.0,
+    div_mode: str = 'Country',
 ) -> dict:
     """Compute KPIs from a strategic dispatch result."""
     _empty = {
@@ -949,8 +950,15 @@ def _compute_strategic_kpis(
     )
     weighted_security = float((dispatch_df['cpi_score'] * weights).sum())
     weighted_water    = float((dispatch_df['bws_score']  * weights).sum())
-    hhi               = float((weights ** 2).sum())
     n_countries       = int((dispatch_df['allocated_kt'] > 1e-3).sum())
+
+    # HHI computed at the grouping level matching div_mode
+    _hhi_col = {'Country': 'ISO_A3', 'Region': 'H2_Region', 'Corridor': 'corridor_id'}.get(div_mode, 'ISO_A3')
+    if _hhi_col in dispatch_df.columns:
+        _group_shares = dispatch_df.groupby(_hhi_col)['allocated_kt'].sum() / total
+        hhi = float((_group_shares ** 2).sum())
+    else:
+        hhi = float((weights ** 2).sum())
 
     # Total carbon avoided [kt CO₂] = grey baseline emissions × demand
     # Assumes green H₂ is zero-emission; depends only on demand and the grey reference,
@@ -977,6 +985,7 @@ def _compute_strategic_kpis(
         'weighted_water':        weighted_water,
         'total_carbon_avoided':  total_carbon_avoided,
         'n_countries':           n_countries,
+        'div_mode':              div_mode,
         'radar_cost':            radar_cost,
         'radar_security':        radar_security,
         'radar_diversification': radar_diversification,
@@ -996,13 +1005,14 @@ def fig_strategic_radar(kpis: dict, height: int = 420) -> go.Figure:
     def _fmt(val, fmt, fallback='N/A'):
         return fmt.format(val) if pd.notna(val) else fallback
 
+    div_mode = kpis.get('div_mode', 'Country')
     div_val = (1.0 - hhi) if pd.notna(hhi) else np.nan
     tca_mt  = tca / 1000 if pd.notna(tca) else np.nan  # convert to Mt CO₂ for display
 
     categories = [
         f"Cost Score<br>({_fmt(dc, '{:.2f} €/kg')})",
         f"Security<br>(CPI: {_fmt(sec, '{:.0f}')})",
-        f"Diversification<br>(1−HHI: {_fmt(div_val, '{:.2f}')})",
+        f"Diversification ({div_mode})<br>(1−HHI: {_fmt(div_val, '{:.2f}')})",
         f"Water Access<br>(BWS: {_fmt(bws, '{:.2f}')})",
         f"Carbon Avoided<br>({_fmt(tca_mt, '{:.2f} MtCO₂')})",
     ]
@@ -2235,6 +2245,7 @@ def main():
             st.caption('Weights are auto-normalised — they need not sum to 100.')
             w_cost  = st.slider('Cost',                    0, 100, 25, key='strat_w_cost')
             w_sec   = st.slider('Security (CPI)',           0, 100, 25, key='strat_w_sec')
+            w_water = st.slider('Water Access',             0, 100, 25, key='strat_w_water')
             div_mode = st.selectbox(
                 'Diversification by',
                 options=['Country', 'Region', 'Corridor'],
@@ -2254,7 +2265,6 @@ def main():
                 help='EU domestic supply is not subject to the diversification cap — '
                      'it represents home production, not dependency on a foreign supplier.',
             )
-            w_water = st.slider('Water Access',             0, 100, 25, key='strat_w_water')
             total_w = w_cost + w_sec + w_dep + w_water
             st.caption(f'Sum of weights: {total_w}')
 
@@ -2283,7 +2293,7 @@ def main():
             div_mode=div_mode, exempt_eu=exempt_eu,
         )
         _strat_kpis = _compute_strategic_kpis(
-            _strat_disp, h2_demand_kt, float(ref_emiss_grey)
+            _strat_disp, h2_demand_kt, float(ref_emiss_grey), div_mode=div_mode,
         )
 
         # ── Charts in right column: map on top, radar below ──
