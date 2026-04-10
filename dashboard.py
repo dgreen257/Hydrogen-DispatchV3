@@ -817,13 +817,7 @@ def _aggregate_strategic_country_df(
     else:
         all_df['bws_score'] = np.nan
 
-    # Fill missing scores with medians
-    median_cpi = float(all_df['cpi_score'].median()) if all_df['cpi_score'].notna().any() else 43.0
-    median_bws = float(all_df['bws_score'].median()) if all_df['bws_score'].notna().any() else 2.5
-    all_df['cpi_score'] = all_df['cpi_score'].fillna(median_cpi)
-    all_df['bws_score'] = all_df['bws_score'].fillna(median_bws)
-
-    # Normalise to 0–1
+    # Normalise to 0–1 (NaN left intact — exclusion handled in _build_strategic_dispatch)
     cost_min  = float(all_df['rep_cost_per_kg'].min())
     cost_max  = float(all_df['rep_cost_per_kg'].quantile(0.95))
     cost_rng  = max(cost_max - cost_min, 1e-6)
@@ -852,6 +846,15 @@ def _build_strategic_dispatch(
         return pd.DataFrame()
 
     df = country_df.copy()
+
+    # Exclude countries missing data for indicators that are actually weighted
+    if w_sec > 0:
+        df = df[df['security_norm'].notna()]
+    if w_water > 0:
+        df = df[df['water_norm'].notna()]
+    # Fill any residual NaN norms (weight=0 case) so composite stays finite
+    df['security_norm'] = df['security_norm'].fillna(0.5)
+    df['water_norm']    = df['water_norm'].fillna(0.5)
 
     # Composite score (lower is more preferred)
     w_sum = float(w_cost + w_sec + w_water)
