@@ -107,8 +107,8 @@ from plotly.subplots import make_subplots
 # --- Water stress indicator (WRI Aqueduct 3.0) ---
 # Switch between 'bws' (Baseline Water Stress) and 'drr' (Drought Risk) by
 # changing WATER_INDICATOR. WATER_LABEL is used for display only.
-WATER_INDICATOR = 'drr'
-WATER_LABEL     = 'DRR'
+WATER_INDICATOR = 'bws'
+WATER_LABEL     = 'BWS'
 # -------------------------------------------------
 
 GEO_LAYOUT = dict(
