@@ -2240,6 +2240,8 @@ def main():
             w_dep   = st.slider('Diversification',          0, 100, 25, key='strat_w_dep',
                                 help='Controls maximum share any single country/region/corridor can supply. '
                                      'At 100 no single entity supplies more than 5% of demand.')
+            _dep_cap_pct = max(5.0, (1.0 - w_dep / 100.0) ** 2 * 100)
+            st.caption(f'Max per {div_mode.lower()}: **{_dep_cap_pct:.0f}%** of demand')
             w_water = st.slider('Water Access',             0, 100, 25, key='strat_w_water')
             total_w = w_cost + w_sec + w_dep + w_water
             st.caption(f'Sum of weights: {total_w}')
