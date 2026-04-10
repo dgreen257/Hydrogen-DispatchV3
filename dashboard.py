@@ -709,7 +709,7 @@ def fig_security_map(height: int = 380) -> go.Figure:
 
 
 def fig_water_stress_map(height: int = 380) -> go.Figure:
-    """Choropleth of WRI Aqueduct baseline water stress score by country."""
+    """Choropleth of WRI Aqueduct water indicator score by country."""
     df = load_water_stress_data()
     if df.empty:
         return go.Figure().update_layout(title='Water stress data not found', height=height)
@@ -718,18 +718,17 @@ def fig_water_stress_map(height: int = 380) -> go.Figure:
         locations='iso_a3',
         color='score',
         color_continuous_scale='RdYlBu_r',
-        range_color=[0, 5],
         hover_name='name_0',
         hover_data={'score': ':.2f', 'label': True, 'iso_a3': False},
-        title='Baseline Water Stress (WRI Aqueduct 3.0)',
-        labels={'score': 'BWS Score', 'label': 'Category'},
+        title=f'{WATER_LABEL} — Water Risk (WRI Aqueduct 3.0)',
+        labels={'score': f'{WATER_LABEL} Score', 'label': 'Category'},
     )
     fig.update_geos(**CHOROPLETH_GEO)
     fig.update_layout(
         paper_bgcolor='white',
         margin=dict(l=0, r=0, t=50, b=0),
         height=height,
-        coloraxis_colorbar=dict(title='BWS Score', thickness=15, len=0.6),
+        coloraxis_colorbar=dict(title=f'{WATER_LABEL} Score', thickness=15, len=0.6),
     )
     return fig
 
