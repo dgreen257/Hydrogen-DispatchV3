@@ -104,6 +104,13 @@ from generation_costs import global_capex
 from country_factors import SOLAR_CAPEX_FACTOR, WIND_CAPEX_FACTOR, WACC, WACC_COUNTRY_REN, WACC_COUNTRY_ELEC
 from plotly.subplots import make_subplots
 
+# --- Water stress indicator (WRI Aqueduct 3.0) ---
+# Switch between 'bws' (Baseline Water Stress) and 'drr' (Drought Risk) by
+# changing WATER_INDICATOR. WATER_LABEL is used for display only.
+WATER_INDICATOR = 'drr'
+WATER_LABEL     = 'DRR'
+# -------------------------------------------------
+
 GEO_LAYOUT = dict(
     showland=True,
     landcolor='rgb(212,212,212)',
@@ -669,10 +676,10 @@ def load_water_stress_data() -> pd.DataFrame:
     if not os.path.exists(path):
         return pd.DataFrame()
     df = pd.read_excel(path, sheet_name='results country')
-    bws = df[(df['indicator_name'] == 'bws') & (df['weight'] == 'Tot')].copy()
-    bws['score'] = pd.to_numeric(bws['score'], errors='coerce')
-    bws.loc[bws['score'] < 0, 'score'] = np.nan
-    return bws[['iso_a3', 'name_0', 'score', 'label']].reset_index(drop=True)
+    wat = df[(df['indicator_name'] == WATER_INDICATOR) & (df['weight'] == 'Tot')].copy()
+    wat['score'] = pd.to_numeric(wat['score'], errors='coerce')
+    wat.loc[wat['score'] < 0, 'score'] = np.nan
+    return wat[['iso_a3', 'name_0', 'score', 'label']].reset_index(drop=True)
 
 
 def fig_security_map(height: int = 380) -> go.Figure:
@@ -811,17 +818,17 @@ def _aggregate_strategic_country_df(
     # Merge water stress (BWS)
     if not water_df.empty and 'iso_a3' in water_df.columns:
         wat = water_df[['iso_a3', 'score']].rename(
-            columns={'iso_a3': 'ISO_A3', 'score': 'bws_score'}
+            columns={'iso_a3': 'ISO_A3', 'score': 'water_score'}
         )
         all_df = all_df.merge(wat, on='ISO_A3', how='left')
     else:
-        all_df['bws_score'] = np.nan
+        all_df['water_score'] = np.nan
 
     # Fill missing scores with medians
-    median_cpi = float(all_df['cpi_score'].median()) if all_df['cpi_score'].notna().any() else 43.0
-    median_bws = float(all_df['bws_score'].median()) if all_df['bws_score'].notna().any() else 2.5
-    all_df['cpi_score'] = all_df['cpi_score'].fillna(median_cpi)
-    all_df['bws_score'] = all_df['bws_score'].fillna(median_bws)
+    median_cpi   = float(all_df['cpi_score'].median())   if all_df['cpi_score'].notna().any()   else 43.0
+    median_water = float(all_df['water_score'].median()) if all_df['water_score'].notna().any() else 2.5
+    all_df['cpi_score']   = all_df['cpi_score'].fillna(median_cpi)
+    all_df['water_score'] = all_df['water_score'].fillna(median_water)
 
     # Normalise to 0–1
     cost_min  = float(all_df['rep_cost_per_kg'].min())
@@ -829,7 +836,7 @@ def _aggregate_strategic_country_df(
     cost_rng  = max(cost_max - cost_min, 1e-6)
     all_df['cost_norm']     = ((all_df['rep_cost_per_kg'] - cost_min) / cost_rng).clip(0, 1)
     all_df['security_norm'] = (all_df['cpi_score'] / 100.0).clip(0, 1)
-    all_df['water_norm']    = (all_df['bws_score']  / 5.0 ).clip(0, 1)
+    all_df['water_norm']    = (all_df['water_score'] / 5.0 ).clip(0, 1)
 
     return all_df.sort_values('rep_cost_per_kg').reset_index(drop=True)
 
@@ -929,7 +936,7 @@ def _compute_strategic_kpis(
         if 'rep_emissions_per_kg' in dispatch_df.columns else np.nan
     )
     weighted_security = float((dispatch_df['cpi_score'] * weights).sum())
-    weighted_water    = float((dispatch_df['bws_score']  * weights).sum())
+    weighted_water    = float((dispatch_df['water_score'] * weights).sum())
     hhi               = float((weights ** 2).sum())
     n_countries       = int((dispatch_df['allocated_kt'] > 1e-3).sum())
 
@@ -984,7 +991,7 @@ def fig_strategic_radar(kpis: dict, height: int = 420) -> go.Figure:
         f"Cost Score<br>({_fmt(dc, '{:.2f} €/kg')})",
         f"Security<br>(CPI: {_fmt(sec, '{:.0f}')})",
         f"Diversification<br>(1−HHI: {_fmt(div_val, '{:.2f}')})",
-        f"Water Access<br>(BWS: {_fmt(bws, '{:.2f}')})",
+        f"Water Access<br>({WATER_LABEL}: {_fmt(bws, '{:.2f}')})",
         f"Carbon Avoided<br>({_fmt(tca_mt, '{:.2f} MtCO₂')})",
     ]
 
@@ -1045,8 +1052,8 @@ def fig_strategic_source_map(
         hover_data['rep_cost_per_kg'] = ':.3f'
     if 'cpi_score' in df.columns:
         hover_data['cpi_score'] = ':.0f'
-    if 'bws_score' in df.columns:
-        hover_data['bws_score'] = ':.2f'
+    if 'water_score' in df.columns:
+        hover_data['water_score'] = ':.2f'
 
     max_pct = max(float(df['pct_demand'].max()), 1.0)
 
@@ -1063,7 +1070,7 @@ def fig_strategic_source_map(
             'allocated_Mt':    'Mt H₂/yr',
             'rep_cost_per_kg': '€/kg',
             'cpi_score':       'CPI',
-            'bws_score':       'BWS',
+            'water_score':     WATER_LABEL,
         },
         title='Source Countries — Strategic Dispatch',
     )
@@ -1189,7 +1196,7 @@ def _generate_strategic_pdf(
     n_c     = kpis.get('n_countries', 0)
     tot_alloc_kt = dispatch_df['allocated_kt'].sum() if not dispatch_df.empty else 0
 
-    kpi_headers = ['Delivered Cost', 'Security (CPI)', 'Diversification (1−HHI)', 'Water Stress (BWS)', 'Total Carbon Avoided']
+    kpi_headers = ['Delivered Cost', 'Security (CPI)', 'Diversification (1−HHI)', f'Water Stress ({WATER_LABEL})', 'Total Carbon Avoided']
     kpi_values  = [
         f'{dc:.3f} €/kg'              if pd.notna(dc)      else '—',
         f'{sec_val:.0f} / 100'        if pd.notna(sec_val) else '—',
@@ -1272,7 +1279,7 @@ def _generate_strategic_pdf(
             'rep_cost_per_kg':      'Cost (€/kg)',
             'rep_emissions_per_kg': 'Emissions (kg)',
             'cpi_score':            'CPI',
-            'bws_score':            'BWS',
+            'water_score':          WATER_LABEL,
         }
         present  = [c for c in col_order if c in _disp.columns]
         headers_d = [col_order[c] for c in present]
@@ -2276,7 +2283,7 @@ def main():
                 f'- **Delivered cost:** {"—" if pd.isna(dc) else f"{dc:.3f} €/kg"}\n'
                 f'- **Security (CPI):** {"—" if pd.isna(sec_val) else f"{sec_val:.0f} / 100"}\n'
                 f'- **Diversification (1−HHI):** {"—" if pd.isna(div_val) else f"{div_val:.3f}"}\n'
-                f'- **Water stress (BWS):** {"—" if pd.isna(bws_val) else f"{bws_val:.2f} / 5.0"}\n'
+                f'- **Water stress ({WATER_LABEL}):** {"—" if pd.isna(bws_val) else f"{bws_val:.2f} / 5.0"}\n'
                 f'- **Total carbon avoided:** {ca_str}'
             )
             st.divider()
@@ -2297,7 +2304,7 @@ def main():
         if not _strat_disp.empty:
             with st.expander('Dispatch detail table', expanded=False):
                 _display_cols = ['Country', 'ISO_A3', 'corridor_id', 'allocated_kt',
-                                 'rep_cost_per_kg', 'rep_emissions_per_kg', 'cpi_score', 'bws_score']
+                                 'rep_cost_per_kg', 'rep_emissions_per_kg', 'cpi_score', 'water_score']
                 _display_cols = [c for c in _display_cols if c in _strat_disp.columns]
                 _disp_show = _strat_disp[_display_cols].copy()
                 _disp_show['allocated_Mt'] = (_disp_show['allocated_kt'] / 1000).round(3)
@@ -2313,7 +2320,7 @@ def main():
                         'rep_cost_per_kg':      'Cost (€/kg)',
                         'rep_emissions_per_kg': 'Emissions (kgCO₂/kg)',
                         'cpi_score':            'CPI Score',
-                        'bws_score':            'BWS Score',
+                        'water_score':          f'{WATER_LABEL} Score',
                     }),
                     use_container_width=True,
                     hide_index=True,
