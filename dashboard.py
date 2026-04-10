@@ -774,6 +774,7 @@ def _aggregate_strategic_country_df(
                 'ISO_A3':               iso,
                 'Country':              grp['Country'].iloc[0] if 'Country' in grp.columns else iso,
                 'corridor_id':          cid,
+                'H2_Region':            grp['H2_Region'].mode()[0] if 'H2_Region' in grp.columns else 'Other',
                 'rep_cost_per_kg':      float(middle['Total Cost per kg H2'].mean()),
                 'rep_emissions_per_kg': rep_emiss,
                 'country_cap_kt':       cap,
@@ -835,12 +836,14 @@ def _build_strategic_dispatch(
     w_sec: float,
     w_dep: float,
     w_water: float,
+    div_mode: str = 'Country',
 ) -> pd.DataFrame:
     """
     Weighted greedy dispatch.
 
     w_cost / w_sec / w_water feed into a per-country composite score (lower = preferred).
-    w_dep controls the concentration cap: higher weight → smaller max share per country.
+    w_dep controls the concentration cap: higher weight → smaller max share per entity.
+    div_mode controls what counts as an entity: 'Country', 'Region', or 'Corridor'.
     """
     if country_df.empty or demand_kt <= 0:
         return pd.DataFrame()
@@ -868,22 +871,30 @@ def _build_strategic_dispatch(
 
     df = df.sort_values('composite').reset_index(drop=True)
 
-    # Concentration cap derived from diversification weight
+    # Concentration cap derived from diversification weight (quadratic for more sensitivity)
     w_dep_frac = float(w_dep) / 100.0
-    max_per_country_kt = demand_kt * max(0.05, 1.0 - 0.95 * w_dep_frac)
+    max_per_entity_kt = demand_kt * max(0.05, (1.0 - w_dep_frac) ** 2)
+
+    _GROUP_COL = {'Country': 'ISO_A3', 'Region': 'H2_Region', 'Corridor': 'corridor_id'}
+    group_col = _GROUP_COL.get(div_mode, 'ISO_A3')
 
     allocated_rows = []
     remaining = float(demand_kt)
+    group_used: dict = {}
 
-    # First pass: respect concentration cap
+    # First pass: respect group concentration cap
     for _, row in df.iterrows():
         if remaining <= 1e-6:
             break
-        avail = min(float(row['country_cap_kt']), max_per_country_kt)
+        key = row.get(group_col, row['ISO_A3'])
+        used = group_used.get(key, 0.0)
+        group_avail = max(0.0, max_per_entity_kt - used)
+        avail = min(float(row['country_cap_kt']), group_avail)
         alloc = min(remaining, avail)
         if alloc > 1e-6:
             allocated_rows.append({**row.to_dict(), 'allocated_kt': alloc})
             remaining -= alloc
+            group_used[key] = used + alloc
 
     # Second pass: if demand still unmet, fill without concentration cap
     if remaining > 1e-6:
@@ -2219,9 +2230,16 @@ def main():
             st.caption('Weights are auto-normalised — they need not sum to 100.')
             w_cost  = st.slider('Cost',                    0, 100, 25, key='strat_w_cost')
             w_sec   = st.slider('Security (CPI)',           0, 100, 25, key='strat_w_sec')
+            div_mode = st.selectbox(
+                'Diversification by',
+                options=['Country', 'Region', 'Corridor'],
+                index=0,
+                key='strat_div_mode',
+                help='Apply the diversification cap to individual countries, H₂ production regions, or supply corridors.',
+            )
             w_dep   = st.slider('Diversification',          0, 100, 25, key='strat_w_dep',
-                                help='Controls maximum share any single country can supply. '
-                                     'At 100 no country supplies more than 5% of demand.')
+                                help='Controls maximum share any single country/region/corridor can supply. '
+                                     'At 100 no single entity supplies more than 5% of demand.')
             w_water = st.slider('Water Access',             0, 100, 25, key='strat_w_water')
             total_w = w_cost + w_sec + w_dep + w_water
             st.caption(f'Sum of weights: {total_w}')
@@ -2247,7 +2265,7 @@ def main():
             cap_on=strat_cap_on,
         )
         _strat_disp = _build_strategic_dispatch(
-            _strat_ctry, h2_demand_kt, w_cost, w_sec, w_dep, w_water
+            _strat_ctry, h2_demand_kt, w_cost, w_sec, w_dep, w_water, div_mode=div_mode
         )
         _strat_kpis = _compute_strategic_kpis(
             _strat_disp, h2_demand_kt, float(ref_emiss_grey)
