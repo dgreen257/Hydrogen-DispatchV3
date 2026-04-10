@@ -59,7 +59,7 @@ PORT_OPTIONS = {
 }
 
 from config import DEMAND_PROFILES, demand_for_year
-from corridors import CORRIDORS
+from corridors import CORRIDORS, EU_MEMBER_ISOS
 from plot_corridor import _build_flow_map_fig, _supply_curve_data, _build_optimal_mix
 # aggregate_country_supply inlined from run_corridors.py to avoid heavy dependencies
 def aggregate_country_supply(df: pd.DataFrame, caps: dict,
@@ -837,6 +837,7 @@ def _build_strategic_dispatch(
     w_dep: float,
     w_water: float,
     div_mode: str = 'Country',
+    exempt_eu: bool = False,
 ) -> pd.DataFrame:
     """
     Weighted greedy dispatch.
@@ -886,15 +887,19 @@ def _build_strategic_dispatch(
     for _, row in df.iterrows():
         if remaining <= 1e-6:
             break
-        key = row.get(group_col, row['ISO_A3'])
-        used = group_used.get(key, 0.0)
-        group_avail = max(0.0, max_per_entity_kt - used)
-        avail = min(float(row['country_cap_kt']), group_avail)
+        is_eu_domestic = exempt_eu and row.get('corridor_id') == 'EU'
+        if is_eu_domestic:
+            avail = min(float(row['country_cap_kt']), remaining)
+        else:
+            key = row.get(group_col, row['ISO_A3'])
+            used = group_used.get(key, 0.0)
+            group_avail = max(0.0, max_per_entity_kt - used)
+            avail = min(float(row['country_cap_kt']), group_avail)
+            group_used[key] = used + min(remaining, avail)
         alloc = min(remaining, avail)
         if alloc > 1e-6:
             allocated_rows.append({**row.to_dict(), 'allocated_kt': alloc})
             remaining -= alloc
-            group_used[key] = used + alloc
 
     # Second pass: if demand still unmet, fill without concentration cap
     if remaining > 1e-6:
@@ -2242,6 +2247,13 @@ def main():
                                      'At 100 no single entity supplies more than 5% of demand.')
             _dep_cap_pct = max(5.0, (1.0 - w_dep / 100.0) ** 2 * 100)
             st.caption(f'Max per {div_mode.lower()}: **{_dep_cap_pct:.0f}%** of demand')
+            exempt_eu = st.checkbox(
+                'Exempt EU domestic production',
+                value=True,
+                key='strat_exempt_eu',
+                help='EU domestic supply is not subject to the diversification cap — '
+                     'it represents home production, not dependency on a foreign supplier.',
+            )
             w_water = st.slider('Water Access',             0, 100, 25, key='strat_w_water')
             total_w = w_cost + w_sec + w_dep + w_water
             st.caption(f'Sum of weights: {total_w}')
@@ -2267,7 +2279,8 @@ def main():
             cap_on=strat_cap_on,
         )
         _strat_disp = _build_strategic_dispatch(
-            _strat_ctry, h2_demand_kt, w_cost, w_sec, w_dep, w_water, div_mode=div_mode
+            _strat_ctry, h2_demand_kt, w_cost, w_sec, w_dep, w_water,
+            div_mode=div_mode, exempt_eu=exempt_eu,
         )
         _strat_kpis = _compute_strategic_kpis(
             _strat_disp, h2_demand_kt, float(ref_emiss_grey)
