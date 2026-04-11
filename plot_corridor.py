@@ -1076,7 +1076,7 @@ def plot_cost_component_breakdown(results: dict, h2_demand: float = 15_000,
     from generation_costs import annualise
 
     year_diff                = max(0, min(30, year - 2020))
-    full_load_hours          = 6000
+    full_load_hours          = 4000
     other_capex_elec         = 41.6                         # Electrical BOP [EUR/kW]
     compression_capex_per_kw = 35.0 * (0.985 ** year_diff) # Compression vessel [EUR/kW]
     elec_opex                = 0.02
