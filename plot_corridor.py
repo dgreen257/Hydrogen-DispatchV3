@@ -1086,7 +1086,7 @@ def plot_cost_component_breakdown(results: dict, h2_demand: float = 15_000,
     if elec_type == 'alkaline':
         capex_h2_global  = 650  * (0.97  ** year_diff)
         lifetime_hours   = 80000 + 1333 * year_diff
-        electrolyser_eff = 0.640 + 0.0057 * year_diff
+        electrolyser_eff = 0.670 + 0.0050 * year_diff
     elif elec_type == 'SOEC':
         capex_h2_global  = 2500 * (0.95  ** year_diff)
         lifetime_hours   = 20000 + 2667 * year_diff
