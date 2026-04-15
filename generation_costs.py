@@ -29,7 +29,7 @@ def global_capex(year: int, elec_type: str = 'alkaline') -> dict:
     if elec_type == 'alkaline':
         capex_elec = (850 * (0.917 ** year_diff) if year <= 2030
                       else 850 * (0.917 ** 4) * (0.976 ** (year - 2030)))
-        efficiency = 0.712 + 0.0020 * year_diff
+        efficiency = 0.640 + 0.0057 * year_diff
     elif elec_type == 'SOEC':
         capex_elec = 2200 * (0.95 ** year_diff)
         efficiency = 0.808 + 0.0013 * year_diff
@@ -137,7 +137,7 @@ def generation_costs(df_ren, h2_demand, year=2020, elec_type='alkaline',
         else:
             capex_h2_global  = 850 * (0.917 ** 4) * (0.976 ** (year - 2030))  # ~601→~471 by 2040 (~2.4%/yr)
         lifetime_hours       = 88000 + 1333 * year_diff     # hrs; ~88k hrs in 2026 → ~120k by 2050
-        electrolyser_eff     = 0.712 + 0.0020 * year_diff   # LHV; 71.2% in 2026 → ~76% by 2050
+        electrolyser_eff     = 0.640 + 0.0057 * year_diff   # LHV; 64% in 2026 → ~72% in 2040
     elif elec_type == 'SOEC':
         capex_h2_global      = 2200 * (0.95 ** year_diff)   # EUR/kW; 2026 early-commercial baseline
         lifetime_hours       = 36000 + 2667 * year_diff     # hrs; improving rapidly
