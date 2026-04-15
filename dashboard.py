@@ -456,6 +456,10 @@ def fig_cost_breakdown(dfs_filtered: dict, show_corridors: list[str], n_countrie
                                   'Transport Cost per kg H2'])
         if 'Country' not in valid.columns or valid.empty:
             continue
+        _non_countries = {'Ocean', 'International', 'Somaliland', '-99', '---'}
+        valid = valid[~valid['Country'].isin(_non_countries)]
+        if valid.empty:
+            continue
         ctry = (valid.groupby('Country')
                      .agg(gen_cost=('Gen. cost per kg H2', 'mean'),
                           trans_cost=('Transport Cost per kg H2', 'mean'),
@@ -486,6 +490,7 @@ def fig_cost_breakdown(dfs_filtered: dict, show_corridors: list[str], n_countrie
         plot_bgcolor='white',
         height=450,
     )
+    fig.update_xaxes(tickangle=0)
     return fig
 
 
