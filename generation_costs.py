@@ -45,7 +45,7 @@ def global_capex(year: int, elec_type: str = 'alkaline') -> dict:
 
 
 def generation_costs(df_ren, h2_demand, year=2020, elec_type='alkaline',
-                     full_load_hours=4000, location_adjusted=True,
+                     full_load_hours=6000, location_adjusted=True,
                      capex_solar_override=None,
                      capex_wind_override=None,
                      capex_elec_override=None):
