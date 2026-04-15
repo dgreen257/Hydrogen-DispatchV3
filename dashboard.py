@@ -459,19 +459,20 @@ def fig_cost_breakdown(dfs_filtered: dict, show_corridors: list[str], n_countrie
         ctry = (valid.groupby('Country')
                      .agg(gen_cost=('Gen. cost per kg H2', 'mean'),
                           trans_cost=('Transport Cost per kg H2', 'mean'),
-                          total_cost=('Total Cost per kg H2', 'mean'))
+                          total_cost=('Total Cost per kg H2', 'mean'),
+                          iso=('ISO_A3', 'first'))
                      .sort_values('total_cost')
                      .head(n_countries)
                      .reset_index())
 
         fig.add_trace(go.Bar(
-            name='Generation', x=ctry['Country'], y=ctry['gen_cost'],
+            name='Generation', x=ctry['iso'], y=ctry['gen_cost'],
             marker_color='#457B9D',
             hovertemplate='%{x}<br>Generation: %{y:.2f} €/kg H₂<extra></extra>',
             legendgroup='gen', showlegend=showlegend,
         ), row=1, col=i)
         fig.add_trace(go.Bar(
-            name='Transport', x=ctry['Country'], y=ctry['trans_cost'],
+            name='Transport', x=ctry['iso'], y=ctry['trans_cost'],
             marker_color='#E63946',
             hovertemplate='%{x}<br>Transport: %{y:.2f} €/kg H₂<extra></extra>',
             legendgroup='trans', showlegend=showlegend,
