@@ -192,59 +192,12 @@ def load_corridors(year: int, scenario: str) -> dict[str, pd.DataFrame]:
             df = pd.read_csv(path, index_col=0)
             # Natural Earth assigns ISO_A3 = '-99' to some countries (France, Norway).
             # Remap using Country name so CPI/BWS merges work correctly.
+            # Unknown entries (Somaliland, Ocean) keep their original value.
             _NEG99_FIX = {'France': 'FRA', 'Norway': 'NOR'}
-            # Offshore grid points are labelled 'Ocean / International' in Natural Earth
-            # but carry a valid ISO_A3. Replace with the proper country name.
-            _ISO_TO_NAME: dict[str, str] = {
-                'AFG': 'Afghanistan', 'AGO': 'Angola', 'ALB': 'Albania',
-                'ARE': 'UAE', 'ARG': 'Argentina', 'ARM': 'Armenia',
-                'AUS': 'Australia', 'AUT': 'Austria', 'AZE': 'Azerbaijan',
-                'BEL': 'Belgium', 'BEN': 'Benin', 'BGD': 'Bangladesh',
-                'BGR': 'Bulgaria', 'BHR': 'Bahrain', 'BLR': 'Belarus',
-                'BRA': 'Brazil', 'CAN': 'Canada', 'CHE': 'Switzerland',
-                'CHL': 'Chile', 'CHN': 'China', 'CMR': 'Cameroon',
-                'COD': 'DR Congo', 'COG': 'Congo', 'COL': 'Colombia',
-                'CUB': 'Cuba', 'CYP': 'Cyprus', 'CZE': 'Czechia',
-                'DEU': 'Germany', 'DNK': 'Denmark', 'DZA': 'Algeria',
-                'ECU': 'Ecuador', 'EGY': 'Egypt', 'ESP': 'Spain',
-                'EST': 'Estonia', 'ETH': 'Ethiopia', 'FIN': 'Finland',
-                'FRA': 'France', 'GAB': 'Gabon', 'GBR': 'United Kingdom',
-                'GHA': 'Ghana', 'GRC': 'Greece', 'GRL': 'Greenland',
-                'GTM': 'Guatemala', 'HND': 'Honduras', 'HRV': 'Croatia',
-                'HUN': 'Hungary', 'IDN': 'Indonesia', 'IND': 'India',
-                'IRL': 'Ireland', 'IRN': 'Iran', 'IRQ': 'Iraq',
-                'ISL': 'Iceland', 'ISR': 'Israel', 'ITA': 'Italy',
-                'JOR': 'Jordan', 'JPN': 'Japan', 'KAZ': 'Kazakhstan',
-                'KEN': 'Kenya', 'KWT': 'Kuwait', 'LBN': 'Lebanon',
-                'LBY': 'Libya', 'LTU': 'Lithuania', 'LUX': 'Luxembourg',
-                'LVA': 'Latvia', 'MAR': 'Morocco', 'MDA': 'Moldova',
-                'MDG': 'Madagascar', 'MEX': 'Mexico', 'MLI': 'Mali',
-                'MLT': 'Malta', 'MNG': 'Mongolia', 'MOZ': 'Mozambique',
-                'MRT': 'Mauritania', 'MWI': 'Malawi', 'MYS': 'Malaysia',
-                'NAM': 'Namibia', 'NER': 'Niger', 'NGA': 'Nigeria',
-                'NLD': 'Netherlands', 'NOR': 'Norway', 'NZL': 'New Zealand',
-                'OMN': 'Oman', 'PAK': 'Pakistan', 'PER': 'Peru',
-                'PHL': 'Philippines', 'POL': 'Poland', 'PRT': 'Portugal',
-                'PRY': 'Paraguay', 'QAT': 'Qatar', 'ROU': 'Romania',
-                'RUS': 'Russia', 'SAU': 'Saudi Arabia', 'SDN': 'Sudan',
-                'SEN': 'Senegal', 'SOM': 'Somalia', 'SSD': 'South Sudan',
-                'SVK': 'Slovakia', 'SVN': 'Slovenia', 'SWE': 'Sweden',
-                'SYR': 'Syria', 'TCD': 'Chad', 'TKM': 'Turkmenistan',
-                'TUN': 'Tunisia', 'TUR': 'Turkey', 'TZA': 'Tanzania',
-                'UGA': 'Uganda', 'UKR': 'Ukraine', 'URY': 'Uruguay',
-                'USA': 'United States', 'UZB': 'Uzbekistan', 'VEN': 'Venezuela',
-                'VNM': 'Vietnam', 'YEM': 'Yemen', 'ZAF': 'South Africa',
-                'ZMB': 'Zambia', 'ZWE': 'Zimbabwe',
-            }
             if 'ISO_A3' in df.columns and 'Country' in df.columns:
                 mask = df['ISO_A3'] == '-99'
                 remapped = df.loc[mask, 'Country'].map(_NEG99_FIX)
                 df.loc[mask, 'ISO_A3'] = remapped.fillna(df.loc[mask, 'ISO_A3'])
-                ocean_mask = df['Country'] == 'Ocean / International'
-                df.loc[ocean_mask, 'Country'] = (
-                    df.loc[ocean_mask, 'ISO_A3'].map(_ISO_TO_NAME)
-                    .fillna(df.loc[ocean_mask, 'ISO_A3'])
-                )
             df['Corridor'] = cid
             dfs[cid] = df
     return dfs
