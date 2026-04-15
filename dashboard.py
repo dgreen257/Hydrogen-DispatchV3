@@ -486,10 +486,7 @@ def fig_cost_breakdown(dfs_filtered: dict, show_corridors: list[str], n_countrie
         plot_bgcolor='white',
         height=450,
     )
-<<<<<<< HEAD
     fig.update_xaxes(tickangle=90)
-=======
->>>>>>> parent of 3851cbb (Update dashboard.py)
     return fig
 
 
