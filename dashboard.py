@@ -2314,9 +2314,17 @@ def main():
         div_val = (1.0 - hhi_val) if pd.notna(hhi_val) else np.nan
         bws_val = _strat_kpis.get('weighted_water', np.nan)
         ca_val  = _strat_kpis.get('total_carbon_avoided', np.nan)  # kt CO₂
+        de_val  = _strat_kpis.get('delivered_emissions', np.nan)   # kgCO₂/kgH₂
         n_c       = _strat_kpis.get('n_countries', 0)
         tot_alloc = _strat_disp['allocated_kt'].sum() if not _strat_disp.empty else 0
         ca_str = f'{ca_val / 1000:.2f} Mt CO₂/yr' if pd.notna(ca_val) else 'N/A'
+        # Cost of carbon avoided (€/tCO₂): extra cost of green vs grey per tonne CO₂ displaced
+        _cca_denom = ref_emiss_grey - (de_val if pd.notna(de_val) else 0.0)
+        if pd.notna(dc) and _cca_denom > 1e-6:
+            cca_val = (dc - ref_cost_grey) / _cca_denom * 1000  # €/tCO₂
+            cca_str = f'{cca_val:.0f} €/tCO₂'
+        else:
+            cca_str = 'N/A'
         with left_col:
             st.subheader('Dispatch Summary')
             st.markdown(
@@ -2327,7 +2335,8 @@ def main():
                 f'- **Security (CPI):** {"—" if pd.isna(sec_val) else f"{sec_val:.0f} / 100"}\n'
                 f'- **Diversification (1−HHI):** {"—" if pd.isna(div_val) else f"{div_val:.3f}"}\n'
                 f'- **Water stress (BWS):** {"—" if pd.isna(bws_val) else f"{bws_val:.2f} / 5.0"}\n'
-                f'- **Total carbon avoided:** {ca_str}'
+                f'- **Total carbon avoided:** {ca_str}\n'
+                f'- **Cost of carbon avoided:** {cca_str}'
             )
             st.divider()
             st.subheader('Carbon Reference')
