@@ -1572,7 +1572,6 @@ def fig_capex_assumptions(selected_year: int, elec_type: str = 'alkaline') -> go
     solar_vals = [p['capex_solar']      for p in params]
     elec_vals  = [p['capex_elec']       for p in params]
     if elec_type == 'alkaline':
-        # Dashboard display only: 65% in 2026 rising to 72% in 2040 (0.5 pp/yr)
         eff_vals = [min(65.0 + 0.5 * max(0, y - 2026), 65.0 + 0.5 * 24) for y in years]
     else:
         eff_vals   = [p['efficiency'] * 100 for p in params]
