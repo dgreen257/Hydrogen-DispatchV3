@@ -423,7 +423,8 @@ def fig_supply_curve(results_with_country: dict, h2_demand_kt: float,
                   'Thick segments = optimal mix (cheapest global dispatch, coloured by corridor)</sup>'),
             font=dict(size=15),
         ),
-        xaxis=dict(title='Cumulative supply capacity [kt H₂/yr]', gridcolor='#e0e0e0'),
+        xaxis=dict(title='Cumulative supply capacity [kt H₂/yr]', gridcolor='#e0e0e0',
+                   range=[0, h2_demand_kt]),
         yaxis=dict(title='Total delivered cost [€/kg H₂]', gridcolor='#e0e0e0'),
         legend=dict(
             orientation='v', x=1.01, y=1, xanchor='left',
@@ -1826,23 +1827,9 @@ def main():
         # ── Load data for selected scenario + year ───────────────────────────
         all_dfs = load_corridors(selected_year, selected_scenario)
         available_corridors = sorted(all_dfs.keys())
+        show_corridors = available_corridors
 
-        st.subheader('Corridors')
-        show_corridors = []
-        for cid in available_corridors:
-            label = f'Corridor {cid}'
-            if st.checkbox(label, value=True, key=f'corr_{cid}'):
-                show_corridors.append(cid)
-
-        st.divider()
-
-        st.subheader('Capacity Limits')
-        cap_on = st.toggle(
-            'Apply country capacity limits', value=True,
-            help='Filter to within-cap points (national targets → IEA pipeline → theoretical potential).',
-        )
-
-        st.divider()
+        cap_on = True
 
         st.subheader('CAPEX Sensitivity')
 
