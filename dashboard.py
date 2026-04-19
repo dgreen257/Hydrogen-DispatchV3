@@ -1514,7 +1514,7 @@ def build_summary(dfs_filtered: dict, show_corridors: list[str],
         )
 
         rows.append({
-            'Corridor':                   f'{cid}: {meta.get("name", "")}',
+            'Corridor':                   f'Corridor {cid}',
             'Points (within cap)':        len(df),
             'Half-demand cost (€/kg)':    round(half_dem_cost, 2) if pd.notna(half_dem_cost) else np.nan,
             'Min cost (€/kg)':            round(valid_cost['Total Cost per kg H2'].min(), 2)
@@ -1755,11 +1755,11 @@ def fig_gen_cost_by_region(dfs_filtered: dict, show_corridors: list) -> go.Figur
 
 def main():
     st.set_page_config(
-        page_title='H2 Mapping Dashboard',
+        page_title='European Union Green Hydrogen Supply Dashboard',
         layout='wide',
     )
 
-    st.title('Green Hydrogen — EHB Corridor Analysis')
+    st.title('European Union Green Hydrogen Supply Dashboard')
     st.caption(
         'Transport costs pre-computed once; generation costs calculated live from CAPEX sliders. '
         'Adjust Solar, Wind, and Electrolyser CAPEX to explore cost sensitivity in real time.'
@@ -1830,8 +1830,7 @@ def main():
         st.subheader('Corridors')
         show_corridors = []
         for cid in available_corridors:
-            meta  = CORRIDOR_META.get(cid, {})
-            label = f'Corridor {cid} — {meta.get("name", "")}'
+            label = f'Corridor {cid}'
             if st.checkbox(label, value=True, key=f'corr_{cid}'):
                 show_corridors.append(cid)
 
@@ -1847,14 +1846,7 @@ def main():
 
         st.subheader('CAPEX Sensitivity')
 
-        _elec_type = st.radio(
-            'Electrolyser technology',
-            options=['alkaline', 'PEM', 'SOEC'],
-            index=0,
-            horizontal=True,
-            key='sidebar_elec_type',
-            help='Technology used for generation cost calculation.',
-        )
+        _elec_type = 'alkaline'
 
         _defaults = global_capex(selected_year, _elec_type)
 
@@ -1900,16 +1892,6 @@ def main():
             help='Scales all transport costs for sensitivity analysis.',
         )
         transport_adj_frac = 1.0 + transport_adj_pct / 100.0
-
-        st.divider()
-
-        st.subheader('RED III Threshold')
-        red3_threshold = st.slider(
-            'RED III limit (kgCO₂eq/kgH₂)',
-            min_value=0.5, max_value=10.0,
-            value=EU_RED3_DEFAULT, step=0.05,
-            help='Default: 3.38 kgCO₂eq/kgH₂ (EU RED III delegated act).',
-        )
 
         st.divider()
 
@@ -1965,7 +1947,7 @@ def main():
 
     # ── Summary metrics ──────────────────────────────────────────────────────
     st.subheader('Summary')
-    summary_df = build_summary(dfs_filtered, show_corridors, red3_threshold, h2_demand_kt)
+    summary_df = build_summary(dfs_filtered, show_corridors, EU_RED3_DEFAULT, h2_demand_kt)
 
     # Primary summary: optimal supply mix average cost
     if pd.notna(opt_avg_cost):
@@ -2007,19 +1989,17 @@ def main():
     st.divider()
 
     # ── Main charts ──────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+    tab_supply, tab_strategic, tab_maps, tab_caps, tab_flow, tab_assumptions, tab_projects = st.tabs([
         'Supply Curve',
-        'Cost Breakdown',
+        'Strategic Dispatch',
         'Source Maps',
-        'Transport Modes',
         'Country Caps',
         'Flow Map',
         'Assumptions',
-        'Strategic Dispatch',
         'H₂ Projects Pipeline',
     ])
 
-    with tab1:
+    with tab_supply:
         st.plotly_chart(
             fig_supply_curve(results_with_country, h2_demand_kt, selected_year),
             use_container_width=True,
@@ -2030,14 +2010,7 @@ def main():
             'Thick lines = optimal global dispatch. Countries without a capacity estimate are excluded.'
         )
 
-    with tab2:
-        st.plotly_chart(
-            fig_cost_breakdown(dfs_filtered, show_corridors),
-            width="stretch",
-        )
-        st.caption('Median generation and transport cost across within-cap source points.')
-
-    with tab3:
+    with tab_maps:
         # ── Port selector (affects Total Cost, Transport Cost, Transport Mode maps) ──
         _port_keys  = list(PORT_OPTIONS.keys())
         _port_labels = list(PORT_OPTIONS.values())
@@ -2112,28 +2085,7 @@ def main():
         with _r4c2:
             st.plotly_chart(fig_water_stress_map(height=380), use_container_width=True)
 
-    with tab4:
-        c1, c2 = st.columns([1, 1])
-        with c1:
-            st.plotly_chart(
-                fig_transport_mode_pie(dfs_filtered, show_corridors),
-                width="stretch",
-            )
-        with c2:
-            mode_rows = []
-            for cid in show_corridors:
-                df = dfs_filtered.get(cid)
-                if df is None or 'Cheapest Medium' not in df.columns:
-                    continue
-                counts = df['Cheapest Medium'].value_counts(normalize=True) * 100
-                row = {'Corridor': f'Corridor {cid}'}
-                for mode in ['NH3', 'LOHC', 'H2 Gas', 'H2 Liq']:
-                    row[mode] = f"{counts.get(mode, 0.0):.1f}%"
-                mode_rows.append(row)
-            if mode_rows:
-                st.dataframe(pd.DataFrame(mode_rows), hide_index=True)
-
-    with tab5:
+    with tab_caps:
         caps_df = _load_caps_df()
         if caps_df.empty:
             st.warning(
@@ -2166,7 +2118,7 @@ def main():
                 top20.columns = ['Country (ISO A3)', 'Capacity (kt H₂/yr)', 'Source']
                 st.dataframe(top20, hide_index=True, use_container_width=True)
 
-    with tab6:
+    with tab_flow:
         n_countries_flow = st.slider(
             'Top N source countries per corridor',
             min_value=5, max_value=30, value=15, step=1,
@@ -2182,7 +2134,7 @@ def main():
             'Dot colour = transport medium; dot size ∝ allocated volume.'
         )
 
-    with tab7:
+    with tab_assumptions:
         st.subheader('Technology Cost Assumptions')
         st.caption(
             'Global baseline CAPEX before regional adjustment. '
@@ -2190,10 +2142,7 @@ def main():
             '2030 marks the learning-rate inflection.'
         )
 
-        elec_type_diag = st.radio(
-            'Electrolyser type', ['alkaline', 'PEM', 'SOEC'],
-            horizontal=True, key='diag_elec_type',
-        )
+        elec_type_diag = 'alkaline'
         st.plotly_chart(
             fig_capex_assumptions(selected_year, elec_type_diag),
             use_container_width=True,
@@ -2225,7 +2174,7 @@ def main():
             use_container_width=True,
         )
 
-    with tab8:
+    with tab_strategic:
         st.header('Strategic Multi-Criteria Dispatch')
         st.caption(
             'Adjust the objective weights to explore trade-offs between cost, energy security, '
@@ -2378,50 +2327,8 @@ def main():
                     hide_index=True,
                 )
 
-        # ── PDF export ──
-        st.divider()
-        st.subheader('Export Report')
-        st.caption('Capture current settings, KPIs, charts, and dispatch table as a PDF.')
-        if st.button('Prepare PDF Report', key='strat_pdf_gen'):
-            with st.spinner('Rendering charts and building PDF…'):
-                try:
-                    _pdf_bytes = _generate_strategic_pdf(
-                        scenario=selected_scenario,
-                        year=selected_year,
-                        w_cost=w_cost,
-                        w_sec=w_sec,
-                        w_dep=w_dep,
-                        w_water=w_water,
-                        ref_cost_grey=float(ref_cost_grey),
-                        ref_emiss_grey=float(ref_emiss_grey),
-                        strat_cap_on=strat_cap_on,
-                        kpis=_strat_kpis,
-                        dispatch_df=_strat_disp,
-                        demand_kt=h2_demand_kt,
-                        fig_radar=_fig_strat_radar,
-                        fig_map=_fig_strat_map,
-                    )
-                    st.session_state['_strat_pdf_bytes'] = _pdf_bytes
-                    st.session_state['_strat_pdf_fname'] = (
-                        f'strategic_dispatch_{selected_scenario}_{selected_year}.pdf'
-                    )
-                except ImportError as _e:
-                    st.error(f'Missing dependency: {_e}')
-                    st.info('Install required packages: `pip install reportlab kaleido`')
-                except Exception as _e:
-                    st.error(f'PDF generation failed: {_e}')
 
-        if '_strat_pdf_bytes' in st.session_state:
-            st.download_button(
-                'Download PDF',
-                data=st.session_state['_strat_pdf_bytes'],
-                file_name=st.session_state.get('_strat_pdf_fname', 'strategic_dispatch.pdf'),
-                mime='application/pdf',
-                key='strat_pdf_dl',
-            )
-            st.caption('Re-generate after changing any settings above.')
-
-    with tab9:
+    with tab_projects:
         st.header('Global Electrolytic H₂ Projects Pipeline')
         st.caption(
             'Source: IEA Hydrogen Production Projects database. '
