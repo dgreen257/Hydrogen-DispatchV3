@@ -386,7 +386,7 @@ def fig_supply_curve(results_with_country: dict, h2_demand_kt: float,
                 xs_opt  += [row['cum_kt_start'], row['cum_kt'], None]
                 ys_opt  += [row['cost'], row['cost'], None]
                 hover_opt += [
-                    (f'<b>Optimal mix — {row["country"]} [{cid}]</b><br>'
+                    (f'<b>Optimal ({cid}): {row["country"]}</b><br>'
                      f'Cost: {row["cost"]:.3f} €/kg H₂<br>'
                      f'Allocated: {row["allocated_kt"]:,.0f} kt/yr<extra></extra>')
                 ] * 3
@@ -399,7 +399,7 @@ def fig_supply_curve(results_with_country: dict, h2_demand_kt: float,
                 x=xs_opt, y=ys_opt,
                 mode='lines',
                 line=dict(color=colour, width=5),
-                name=f'Optimal — {cid}: {cfg_name}',
+                name=f'Optimal ({cid})',
                 legendgroup=f'optimal_{cid}',
                 showlegend=first,
                 customdata=hover_opt,
@@ -418,9 +418,7 @@ def fig_supply_curve(results_with_country: dict, h2_demand_kt: float,
 
     fig.update_layout(
         title=dict(
-            text=(f'EHB Corridor Supply Curves — Country Merit Order ({year})<br>'
-                  '<sup>Thin lines = individual corridors  |  '
-                  'Thick segments = optimal mix (cheapest global dispatch, coloured by corridor)</sup>'),
+            text=f'Supply Curves ({year})',
             font=dict(size=15),
         ),
         xaxis=dict(title='Cumulative supply capacity [kt H₂/yr]', gridcolor='#e0e0e0',
@@ -570,7 +568,7 @@ def fig_source_map(dfs_filtered: dict, show_corridors: list[str],
             color=col,
             hover_data={'ISO_A3': True, 'Total Cost per kg H2': ':.2f'},
             projection='natural earth',
-            title=f'Source Locations — {metric}',
+            title=metric,
         )
     else:
         p_hi = combined[col].quantile(0.97)
@@ -580,7 +578,7 @@ def fig_source_map(dfs_filtered: dict, show_corridors: list[str],
             color_continuous_scale='Cividis',
             hover_data={'ISO_A3': True, 'Total Cost per kg H2': ':.2f', col: ':.3f'},
             projection='natural earth',
-            title=f'Source Locations — {metric}',
+            title=metric,
             labels={col: metric},
         )
         fig.update_coloraxes(cmin=combined[col].min(), cmax=p_hi, colorbar_title=metric)
@@ -617,13 +615,13 @@ def fig_port_source_map(df: pd.DataFrame, metric: str, port_label: str,
     }
     col = col_map.get(metric, 'Total Cost per kg H2')
     if col not in df.columns or df.empty:
-        return go.Figure().update_layout(title=f'No data — {metric}', height=height)
+        return go.Figure().update_layout(title=f'No data: {metric}', height=height)
 
     plot_df = df.dropna(subset=['Latitude', 'Longitude', col])
     if plot_df.empty:
-        return go.Figure().update_layout(title=f'No data — {metric}', height=height)
+        return go.Figure().update_layout(title=f'No data: {metric}', height=height)
 
-    title = f'{metric} — Port: {port_label}'
+    title = f'{metric} ({port_label})'
     if col == 'Cheapest Medium':
         fig = px.scatter_geo(
             plot_df, lat='Latitude', lon='Longitude',
@@ -690,7 +688,7 @@ def fig_security_map(height: int = 380) -> go.Figure:
         range_color=[0, 100],
         hover_name='Country / Territory',
         hover_data={'ISO3': True, 'CPI score 2025': True},
-        title='Corruption Perception Index 2025 (higher = less corrupt)',
+        title='Corruption Perceptions Index 2025',
         labels={'CPI score 2025': 'CPI Score'},
     )
     fig.update_geos(**CHOROPLETH_GEO)
@@ -716,7 +714,7 @@ def fig_water_stress_map(height: int = 380) -> go.Figure:
         range_color=[0, 5],
         hover_name='name_0',
         hover_data={'score': ':.2f', 'label': True, 'iso_a3': False},
-        title='Baseline Water Stress (WRI Aqueduct 3.0)',
+        title='Baseline Water Stress',
         labels={'score': 'BWS Score', 'label': 'Category'},
     )
     fig.update_geos(**CHOROPLETH_GEO)
@@ -1096,7 +1094,7 @@ def fig_strategic_source_map(
             'cpi_score':       'CPI',
             'bws_score':       'BWS',
         },
-        title='Source Countries — Strategic Dispatch',
+        title='Source Countries',
     )
     fig.update_geos(**CHOROPLETH_GEO)
     fig.update_layout(
@@ -1392,7 +1390,7 @@ def fig_capacity_map(caps_df: pd.DataFrame, year: int) -> go.Figure:
             'Capacity_kt':  'kt H₂/yr',
             'Source':       'Capacity source',
         },
-        title=f'Green H₂ export capacity by country — {year}',
+        title=f'Export Capacity ({year})',
     )
     fig.update_geos(
         showframe=False,
@@ -1580,10 +1578,10 @@ def fig_capex_assumptions(selected_year: int, elec_type: str = 'alkaline') -> go
     fig = make_subplots(
         rows=2, cols=2,
         subplot_titles=(
-            'Onshore wind CAPEX (EUR/kW)',
-            'Solar PV CAPEX (EUR/kWp)',
-            f'{elec_type.title()} electrolyser CAPEX (EUR/kW)',
-            f'{elec_type.title()} electrolyser efficiency (LHV %)',
+            'Wind CAPEX (€/kW)',
+            'Solar CAPEX (€/kWp)',
+            'Electrolyser CAPEX (€/kW)',
+            'Electrolyser Efficiency (LHV %)',
         ),
         horizontal_spacing=0.12, vertical_spacing=0.20,
     )
@@ -1614,9 +1612,7 @@ def fig_capex_assumptions(selected_year: int, elec_type: str = 'alkaline') -> go
 
     fig.update_xaxes(title_text='Year')
     fig.update_layout(
-        title=(f'<b>Global baseline CAPEX — {selected_year} highlighted</b><br>'
-               '<sup>Pre-regional-adjustment baselines. '
-               'Actual cost per grid point = baseline × region factor, annualised at region WACC.</sup>'),
+        title=f'CAPEX Trajectories ({selected_year})',
         plot_bgcolor='white', paper_bgcolor='white', font=dict(size=11),
         height=480,
     )
@@ -1631,7 +1627,7 @@ def fig_regional_factors_dash() -> go.Figure:
 
     fig = make_subplots(
         rows=1, cols=2,
-        subplot_titles=('Solar CAPEX factor (× baseline)', 'Wind CAPEX factor (× baseline)'),
+        subplot_titles=('Solar (× baseline)', 'Wind (× baseline)'),
         horizontal_spacing=0.10,
     )
     for col, vals, colour in [
@@ -1645,7 +1641,7 @@ def fig_regional_factors_dash() -> go.Figure:
 
     fig.update_xaxes(tickangle=45)
     fig.update_layout(
-        title='<b>Regional CAPEX multipliers</b>',
+        title='Regional CAPEX Multipliers',
         plot_bgcolor='white', paper_bgcolor='white', font=dict(size=11),
         height=380,
     )
@@ -1663,7 +1659,7 @@ def fig_wacc_maps() -> go.Figure:
 
     fig = make_subplots(
         rows=1, cols=2,
-        subplot_titles=('Renewable WACC — Solar & Wind (%)', 'Electrolyser WACC (%)'),
+        subplot_titles=('Renewable WACC (%)', 'Electrolyser WACC (%)'),
         specs=[[{'type': 'choropleth'}, {'type': 'choropleth'}]],
         horizontal_spacing=0.02,
     )
@@ -1693,7 +1689,7 @@ def fig_wacc_maps() -> go.Figure:
         lataxis_range=[-60, 90],
     )
     fig.update_layout(
-        title='<b>WACC by country and technology</b>',
+        title='WACC by Country',
         paper_bgcolor='white', font=dict(size=11),
         height=420,
         margin=dict(l=0, r=0, t=60, b=0),
@@ -1734,11 +1730,11 @@ def fig_gen_cost_by_region(dfs_filtered: dict, show_corridors: list) -> go.Figur
             vals = [combined[combined['H2_Region'] == r][comp].mean() for r in regions]
             fig.add_trace(go.Bar(name=label, x=regions, y=vals, marker_color=colour, opacity=0.85))
         fig.update_layout(barmode='stack',
-                          title='<b>Generation cost breakdown by region</b> (mean across selected corridors)')
+                          title='Generation Cost by Region')
     else:
         vals = [combined[combined['H2_Region'] == r]['Gen. cost per kg H2'].mean() for r in regions]
         fig = go.Figure(go.Bar(x=regions, y=vals, marker_color='#457B9D', opacity=0.85))
-        fig.update_layout(title='<b>Mean generation cost by region</b> (selected corridors)')
+        fig.update_layout(title='Generation Cost by Region')
 
     fig.update_layout(
         xaxis=dict(tickangle=45),
@@ -1761,10 +1757,6 @@ def main():
     )
 
     st.title('European Union Green Hydrogen Supply Dashboard')
-    st.caption(
-        'Transport costs pre-computed once; generation costs calculated live from CAPEX sliders. '
-        'Adjust Solar, Wind, and Electrolyser CAPEX to explore cost sensitivity in real time.'
-    )
 
     # ── Discover available (scenario, year) combinations ─────────────────────
     available = discover_available()
@@ -1791,7 +1783,6 @@ def main():
             'Demand scenario',
             options=available_scenarios,
             index=available_scenarios.index(default_scenario),
-            help='Load pre-computed results for this scenario.',
         )
 
         st.divider()
@@ -1810,7 +1801,6 @@ def main():
         st.metric(
             label=f'Demand ({selected_scenario}, {selected_year})',
             value=f'{h2_demand_mt:.1f} Mt H₂/yr',
-            help='From the scenario demand profile for the selected year.',
         )
 
         # Show full profile for context
@@ -1854,29 +1844,27 @@ def main():
             min_value=100, max_value=1200,
             value=int(_defaults['capex_solar']), step=10,
             key=f'solar_capex_{selected_year}_{_elec_type}',
-            help=f'Global baseline. Year {selected_year} default: {_defaults["capex_solar"]:.0f} €/kWp. '
-                 'Regional multipliers still applied.',
+            help=f'Default {selected_year}: {_defaults["capex_solar"]:.0f} €/kWp',
         )
         wind_capex = st.slider(
             'Wind CAPEX (€/kW)',
             min_value=400, max_value=2000,
             value=int(_defaults['capex_wind']), step=25,
             key=f'wind_capex_{selected_year}_{_elec_type}',
-            help=f'Global baseline (onshore). Year {selected_year} default: {_defaults["capex_wind"]:.0f} €/kW.',
+            help=f'Default {selected_year}: {_defaults["capex_wind"]:.0f} €/kW',
         )
         elec_capex = st.slider(
             'Electrolyser CAPEX (€/kW)',
             min_value=100, max_value=1500,
             value=int(_defaults['capex_elec']), step=25,
             key=f'elec_capex_{selected_year}_{_elec_type}',
-            help=f'Year {selected_year} default: {_defaults["capex_elec"]:.0f} €/kW.',
+            help=f'Default {selected_year}: {_defaults["capex_elec"]:.0f} €/kW',
         )
         transport_adj_pct = st.slider(
             'Transport cost adjustment (%)',
             min_value=-50, max_value=50,
             value=0, step=5, format='%d%%',
             key=_trans_key,
-            help='Scales all transport costs for sensitivity analysis.',
         )
         transport_adj_frac = 1.0 + transport_adj_pct / 100.0
 
@@ -1884,9 +1872,6 @@ def main():
 
         if transport_adj_pct != 0:
             st.info(f'Transport cost adjusted {transport_adj_pct:+d}%.')
-        else:
-            st.caption('Generation costs calculated live from CAPEX sliders. '
-                       'Run `python run_corridors.py --base-only` to refresh base transport data.')
 
     if not all_dfs:
         st.error(f'No corridor base files found in `{RESULTS_DIR}/`.')
@@ -1939,14 +1924,8 @@ def main():
     # Primary summary: optimal supply mix average cost
     if pd.notna(opt_avg_cost):
         st.metric(
-            label='Optimal Supply Mix — Weighted Avg. Delivered Cost',
+            label='Optimal Mix: Avg. Delivered Cost',
             value=f'{opt_avg_cost:.3f} €/kg H₂',
-            help=(
-                f'Volume-weighted average cost of the cheapest global merit-order dispatch. '
-                f'Greedy allocation of {h2_demand_mt:.1f} Mt H₂/yr across all selected '
-                'corridors — cheapest countries dispatched first, respecting national '
-                'capacity caps. This is the minimum achievable average import cost.'
-            ),
         )
 
     # Per-corridor delivered cost at half-demand
@@ -1961,13 +1940,6 @@ def main():
                 st.metric(
                     label=row['Corridor'],
                     value=f"{cost_val:.2f} €/kg" if pd.notna(cost_val) else '—',
-                    help=(
-                        f"{label_text}: weighted-average delivered cost when sourcing "
-                        f"the cheapest {h2_demand_mt/2:.1f} Mt H₂/yr from Corridor {cid_label} "
-                        "(merit-order, cheapest countries first)."
-                        if pd.notna(half_cost) else
-                        f"Median total cost for Corridor {cid_label}."
-                    ),
                 )
 
         with st.expander('Full summary table', expanded=False):
@@ -1991,18 +1963,14 @@ def main():
             fig_supply_curve(results_with_country, h2_demand_kt, selected_year),
             use_container_width=True,
         )
-        st.caption(
-            'Steps ordered cheapest-first per corridor; width = national capacity cap, '
-            'height = trimmed mean cost (P10–P90, excludes cheapest and most expensive 10% of grid points). '
-            'Thick lines = optimal global dispatch. Countries without a capacity estimate are excluded.'
-        )
+        st.caption('Width = country capacity cap; height = P10–P90 trimmed mean cost. Thick lines = optimal dispatch.')
 
     with tab_maps:
         # ── Port selector (affects Total Cost, Transport Cost, Transport Mode maps) ──
         _port_keys  = list(PORT_OPTIONS.keys())
         _port_labels = list(PORT_OPTIONS.values())
         _selected_port_label = st.selectbox(
-            'Import port (affects Total Cost, Transport Cost, and Transport Mode maps)',
+            'Import port',
             options=_port_labels,
             index=0,
             key='tab4_port_select',
@@ -2091,11 +2059,7 @@ def main():
                 key='cap_year_slider',
             )
             st.plotly_chart(fig_capacity_map(caps_df, cap_year), use_container_width=True)
-            st.caption(
-                'Capacity = theoretical potential × readiness(year). '
-                'Readiness anchored to IEA 2030 pipeline, ramping to 100% by 2050. Log scale.'
-            )
-            with st.expander(f'Top 20 countries by capacity — {cap_year}', expanded=False):
+            with st.expander(f'Top 20 countries ({cap_year})', expanded=False):
                 top20 = (
                     caps_df[caps_df['Year'] == cap_year]
                     .sort_values('Capacity_kt', ascending=False)
@@ -2107,7 +2071,7 @@ def main():
 
     with tab_flow:
         n_countries_flow = st.slider(
-            'Top N source countries per corridor',
+            'Countries per corridor',
             min_value=5, max_value=30, value=15, step=1,
             key='flow_n_countries',
         )
@@ -2116,18 +2080,10 @@ def main():
                          selected_year, n_countries=n_countries_flow),
             use_container_width=True,
         )
-        st.caption(
-            'Flow lines from within-cap supply countries to corridor EU entry points (stars). '
-            'Dot colour = transport medium; dot size ∝ allocated volume.'
-        )
+        st.caption('Dot colour = transport carrier; size ∝ allocated volume.')
 
     with tab_assumptions:
         st.subheader('Technology Cost Assumptions')
-        st.caption(
-            'Global baseline CAPEX before regional adjustment. '
-            'Actual cost = baseline × region factor, annualised at region WACC. '
-            '2030 marks the learning-rate inflection.'
-        )
 
         elec_type_diag = 'alkaline'
         st.plotly_chart(
@@ -2137,25 +2093,14 @@ def main():
 
         st.divider()
         st.subheader('Regional Adjustment Factors')
-        st.caption(
-            'Solar/wind CAPEX multiplied by region factors; WACC applied to annualisation (CRF).'
-        )
         st.plotly_chart(fig_regional_factors_dash(), use_container_width=True)
 
         st.divider()
-        st.subheader('WACC by Country and Technology')
-        st.caption(
-            'Weighted average cost of capital (%) used to annualise CAPEX for each technology. '
-            'Renewable WACC applies to solar and wind; electrolyser WACC carries an additional '
-            'technology risk premium (~2%).'
-        )
+        st.subheader('WACC by Country')
         st.plotly_chart(fig_wacc_maps(), use_container_width=True)
 
         st.divider()
-        st.subheader('Generation Cost by Region (current selection)')
-        st.caption(
-            'Mean gen. cost per region across within-cap grid points, split by component.'
-        )
+        st.subheader('Generation Cost by Region')
         st.plotly_chart(
             fig_gen_cost_by_region(dfs_filtered, show_corridors),
             use_container_width=True,
@@ -2163,26 +2108,17 @@ def main():
 
     with tab_strategic:
         st.header('Multi-Criteria Dispatch')
-        st.caption(
-            'Adjust the objective weights to explore trade-offs between cost, energy security, '
-            'supply diversification, and water stress. The dispatch model re-ranks source '
-            'countries according to a weighted composite score and applies a concentration cap '
-            'based on the diversification weight.'
-        )
 
         strat_cap_on = st.toggle(
             'Apply capacity limits',
             value=cap_on,
             key='strat_cap_on',
-            help='When off, all countries are eligible regardless of national production targets. '
-                 'Overrides the global capacity-limits setting for this tab only.',
         )
 
         # ── Layout: left = controls, right = charts ──
         left_col, right_col = st.columns([1, 2])
         with left_col:
             st.subheader('Objective Weights')
-            st.caption('Weights are auto-normalised — they need not sum to 100.')
             w_cost  = st.slider('Cost',                    0, 100, 25, key='strat_w_cost')
             w_sec   = st.slider('Security (CPI)',           0, 100, 25, key='strat_w_sec')
             w_water = st.slider('Water Access',             0, 100, 25, key='strat_w_water')
@@ -2191,19 +2127,14 @@ def main():
                 options=['Country', 'Region', 'Corridor'],
                 index=0,
                 key='strat_div_mode',
-                help='Apply the diversification cap to individual countries, H₂ production regions, or supply corridors.',
             )
-            w_dep   = st.slider('Diversification',          0, 100, 25, key='strat_w_dep',
-                                help='Controls maximum share any single country/region/corridor can supply. '
-                                     'At 100 no single entity supplies more than 5% of demand.')
+            w_dep   = st.slider('Diversification',          0, 100, 25, key='strat_w_dep')
             _dep_cap_pct = max(5.0, (1.0 - w_dep / 100.0) ** 2 * 100)
             st.caption(f'Max per {div_mode.lower()}: **{_dep_cap_pct:.0f}%** of demand')
             exempt_eu = st.checkbox(
                 'Exempt EU domestic production',
                 value=True,
                 key='strat_exempt_eu',
-                help='EU domestic supply is not subject to the diversification cap — '
-                     'it represents home production, not dependency on a foreign supplier.',
             )
             total_w = w_cost + w_sec + w_dep + w_water
             st.caption(f'Sum of weights: {total_w}')
@@ -2316,12 +2247,7 @@ def main():
 
 
     with tab_projects:
-        st.header('Global Electrolytic H₂ Projects Pipeline')
-        st.caption(
-            'Source: IEA Hydrogen Production Projects database. '
-            'Capacity shown is announced/planned kt H₂/yr for electrolysis projects only. '
-            'Colour scale is logarithmic — each step is a 10× increase.'
-        )
+        st.header('H₂ Projects Pipeline')
 
         _proj_df = load_h2_projects()
 
@@ -2391,7 +2317,7 @@ def main():
             st.divider()
 
             # ── Stacked bar: top countries across all sources ──
-            st.subheader('Top countries — capacity by electricity source')
+            st.subheader('Capacity by Electricity Source')
             _top_n = st.slider('Top N countries', min_value=10, max_value=40,
                                 value=20, step=5, key='proj_top_n')
             st.plotly_chart(
@@ -2487,7 +2413,7 @@ def fig_h2_pipeline_map(
 
     if sub.empty:
         return go.Figure().update_layout(
-            title=f'No data — {elec_source} ({", ".join(statuses)})', height=height
+            title=f'No data: {elec_source}', height=height
         )
 
     by_country = (
@@ -2519,11 +2445,7 @@ def fig_h2_pipeline_map(
     # Build a white→colour scale
     colour_scale = [[0, '#f0f0f0'], [1, colour]]
 
-    status_label = ', '.join(statuses) if statuses else 'all statuses'
-    title = (
-        f'<b>{elec_source}</b> — electrolytic H₂ capacity by country<br>'
-        f'<sup>{status_label} | kt H₂/yr (log scale)</sup>'
-    )
+    title = f'{elec_source}'
 
     fig = px.choropleth(
         by_country,
@@ -2608,7 +2530,7 @@ def fig_h2_pipeline_bar(
 
     fig.update_layout(
         barmode='stack',
-        title=f'Top {top_n} countries — electrolytic H₂ capacity by electricity source',
+        title=f'Top {top_n} Countries by Electrolytic H₂ Capacity',
         xaxis_title='Capacity (kt H₂/yr)',
         legend=dict(orientation='h', yanchor='bottom', y=1.01),
         plot_bgcolor='white', paper_bgcolor='white',
