@@ -2162,7 +2162,7 @@ def main():
         )
 
     with tab_strategic:
-        st.header('Strategic Multi-Criteria Dispatch')
+        st.header('Multi-Criteria Dispatch')
         st.caption(
             'Adjust the objective weights to explore trade-offs between cost, energy security, '
             'supply diversification, and water stress. The dispatch model re-ranks source '
