@@ -75,7 +75,7 @@ def _supply_curve_data(results: dict, h2_demand: float = 15_000,
                 'cost':              capped['rep_cost_per_kg'].values,
                 'labels':            capped['ISO_A3'].values,
                 'colour':            cfg['colour'],
-                'label':             f"Corridor {cid}: {cfg['subtitle']}",
+                'label':             f"Corridor {cid}: {cfg.get('gateway', cfg['subtitle'])}",
                 'uncapped_countries': (df_country[~df_country['has_finite_cap']]
                                        ['ISO_A3'].tolist()),
             }
@@ -97,7 +97,7 @@ def _supply_curve_data(results: dict, h2_demand: float = 15_000,
                 'cost':              within['Total Cost per kg H2'].values,
                 'labels':            None,
                 'colour':            cfg['colour'],
-                'label':             f"Corridor {cid}: {cfg['subtitle']}",
+                'label':             f"Corridor {cid}: {cfg.get('gateway', cfg['subtitle'])}",
                 'uncapped_countries': [],
             }
 
@@ -246,12 +246,12 @@ def plot_corridor_supply_curves(results: dict, h2_demand: float = 15_000,
             first = cid not in seen_cids
             seen_cids.add(cid)
 
-            cfg_name = results[cid]['corridor']['subtitle']
+            cfg_name = results[cid]['corridor'].get('gateway', results[cid]['corridor']['subtitle'])
             fig.add_trace(go.Scatter(
                 x=xs, y=ys,
                 mode='lines',
                 line=dict(color=colour, width=5),
-                name=f'Optimal mix — {cid}: {cfg_name}',
+                name=f'Corridor {cid}: {cfg_name}',
                 legendgroup=f'optimal_{cid}',
                 showlegend=first,
                 customdata=hover,
@@ -586,7 +586,7 @@ def _build_flow_map_fig(results: dict, n_countries: int = 15,
             mode='lines',
             line=dict(color=colour, width=1.8),
             opacity=0.55,
-            name=f"Corridor {cid} — {cfg['subtitle']}",
+            name=f"Corridor {cid}: {cfg.get('gateway', cfg['subtitle'])}",
             legendgroup=f'corridor_{cid}',
             showlegend=True,
             hoverinfo='skip',
@@ -721,10 +721,9 @@ def _build_flow_map_fig(results: dict, n_countries: int = 15,
     fig.update_layout(
         title=dict(
             text=(
-                f'EHB Import Corridors — Within-Cap Supply Sources (top {n_countries} per corridor) ({year})<br>'
-                '<sup>Lines = corridors  |  Dot colour = modal transport medium  |  '
-                'Star = EU entry point  |  Dot size ∝ allocated volume  |  Hover for quantity &amp; cost</sup>'
-            ),
+                f'EHB Import Corridors ({year})<br>'
+                '<sup>Top {n_countries} within-cap sources per corridor. Dot size = volume, colour = transport mode. Hover for detail.</sup>'
+            ).replace('{n_countries}', str(n_countries)),
             font=dict(size=15),
             x=0.5, xanchor='center',
         ),
@@ -805,7 +804,7 @@ def plot_optimal_supply_mix(results: dict, demand_kt: float = 15_000):
         agg['_corr_col']  = cfg['colour']
         agg['_dest_lat']  = dest[0] if dest else None
         agg['_dest_lon']  = dest[1] if dest else None
-        agg['_subtitle']  = cfg['subtitle']
+        agg['_subtitle']  = cfg.get('gateway', cfg['subtitle'])
         all_rows.append(agg)
 
     if not all_rows:
@@ -890,7 +889,7 @@ def plot_optimal_supply_mix(results: dict, demand_kt: float = 15_000):
             mode='lines',
             line=dict(color=col, width=1.8),
             opacity=0.50,
-            name=f'Corridor {cid} — {sub_label}',
+            name=f'Corridor {cid}: {sub_label}',
             legendgroup=f'corridor_{cid}',
             showlegend=True,
             hoverinfo='skip',
@@ -959,10 +958,9 @@ def plot_optimal_supply_mix(results: dict, demand_kt: float = 15_000):
     fig.update_layout(
         title=dict(
             text=(
-                f'Optimal Supply Mix — {demand_kt/1000:.0f} Mt H₂/yr demand  '
-                f'({pct_met:.0f}% met,  wavg cost {wavg_cost:.2f} EUR/kg)<br>'
-                '<sup>Dot size ∝ allocated volume  |  Dot colour = transport medium  |  '
-                'Line colour = corridor  |  Hover for detail</sup>'
+                f'Optimal Supply Mix ({year}): {demand_kt/1000:.0f} Mt/yr, '
+                f'{pct_met:.0f}% met, {wavg_cost:.2f} EUR/kg avg<br>'
+                '<sup>Dot size = volume, colour = transport mode. Hover for detail.</sup>'
             ),
             font=dict(size=14),
             x=0.5, xanchor='center',

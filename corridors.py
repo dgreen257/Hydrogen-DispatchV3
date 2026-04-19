@@ -63,6 +63,7 @@ EU_MEMBER_NAMES: frozenset[str] = frozenset({
 CORRIDORS = {
     'A': {
         'name':              'Corridor A',
+        'gateway':           'Italy',
         'subtitle':          'North Africa & Middle East via Italy',
         'description':       ('Piped H\u2082 from Algeria/Tunisia through the Mediterranean '
                               'into Italy and Central Europe; plus Middle East and West African '
@@ -82,6 +83,7 @@ CORRIDORS = {
 
     'B': {
         'name':              'Corridor B',
+        'gateway':           'Spain',
         'subtitle':          'Iberian Gateway (SW Europe, Africa & Americas)',
         'description':       ('Pipeline from Morocco/Algeria + shipping from West/East Africa, '
                               'Latin America and the Middle East, landing in Spain/Portugal.'),
@@ -102,6 +104,7 @@ CORRIDORS = {
 
     'C': {
         'name':              'Corridor C',
+        'gateway':           'Netherlands',
         'subtitle':          'North Sea Hub (Global Seaborne)',
         'description':       ('Global seaborne imports (NH\u2083/LOHC/LH\u2082) arriving at '
                               'Rotterdam, Antwerp, Zeebrugge, Wilhelmshaven.'),
@@ -115,6 +118,7 @@ CORRIDORS = {
 
     'D': {
         'name':              'Corridor D',
+        'gateway':           'Germany',
         'subtitle':          'Nordic, Baltic & Atlantic (Offshore Wind)',
         'description':       ('Offshore wind H\u2082 from Norway, UK and Iceland piped '
                               'south into Hamburg; plus Canada and Greenland shipping '
@@ -132,6 +136,7 @@ CORRIDORS = {
 
     'E': {
         'name':              'Corridor E',
+        'gateway':           'Austria',
         'subtitle':          'SE Europe, Ukraine & Middle East Gateway',
         'description':       ('High solar/wind potential in Ukraine, Turkey and the Caucasus '
                               'piped westward into Austria; plus Middle East sources via '
@@ -151,6 +156,7 @@ CORRIDORS = {
 
     'EU': {
         'name':              'EU Domestic',
+        'gateway':           'EU-27',
         'subtitle':          'EU Domestic Production',
         'description':       ('Green H\u2082 produced within EU-27 member states. '
                               'No transport cost — generation cost only.'),
