@@ -48,7 +48,8 @@ def generation_costs(df_ren, h2_demand, year=2020, elec_type='alkaline',
                      full_load_hours=6000, location_adjusted=True,
                      capex_solar_override=None,
                      capex_wind_override=None,
-                     capex_elec_override=None):
+                     capex_elec_override=None,
+                     eff_override=None):
     """
     Calculates H2 generation cost (yearly and per kg) for every grid point.
 
@@ -158,6 +159,8 @@ def generation_costs(df_ren, h2_demand, year=2020, elec_type='alkaline',
         capex_wind_global = capex_wind_override
     if capex_elec_override is not None:
         capex_h2_global = capex_elec_override
+    if eff_override is not None:
+        electrolyser_eff = eff_override
 
     # ------------------------------------------------------------------
     # Electricity demand sizing

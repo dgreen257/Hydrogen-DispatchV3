@@ -258,7 +258,7 @@ def recompute_within_cap(df: pd.DataFrame, demand_kt: float, year: int) -> pd.Da
 @st.cache_data(show_spinner='Calculating generation costs…')
 def compute_gen_costs(df_base: pd.DataFrame, year: int, elec_type: str,
                       capex_solar: float, capex_wind: float,
-                      capex_elec: float) -> pd.DataFrame:
+                      capex_elec: float, elec_eff: float = None) -> pd.DataFrame:
     """
     Compute generation costs live from CAPEX slider values.
 
@@ -273,6 +273,7 @@ def compute_gen_costs(df_base: pd.DataFrame, year: int, elec_type: str,
         capex_solar_override=capex_solar,
         capex_wind_override=capex_wind,
         capex_elec_override=capex_elec,
+        eff_override=elec_eff,
     )
     if 'Transport Cost per kg H2' in df.columns:
         df['Total Cost per kg H2'] = (
@@ -1830,12 +1831,16 @@ def main():
         _solar_key = f'solar_capex_{selected_year}_{_elec_type}'
         _wind_key  = f'wind_capex_{selected_year}_{_elec_type}'
         _elec_key  = f'elec_capex_{selected_year}_{_elec_type}'
+        _eff_key   = f'elec_eff_{selected_year}_{_elec_type}'
         _trans_key = 'transport_adj_pct'
+
+        _default_eff = round(_defaults['efficiency'] * 100, 1)
 
         if st.button('Reset to defaults', use_container_width=True):
             st.session_state[_solar_key] = int(_defaults['capex_solar'])
             st.session_state[_wind_key]  = int(_defaults['capex_wind'])
             st.session_state[_elec_key]  = int(_defaults['capex_elec'])
+            st.session_state[_eff_key]   = _default_eff
             st.session_state[_trans_key] = 0
             st.rerun()
 
@@ -1860,6 +1865,14 @@ def main():
             key=f'elec_capex_{selected_year}_{_elec_type}',
             help=f'Default {selected_year}: {_defaults["capex_elec"]:.0f} €/kW',
         )
+        elec_eff_pct = st.slider(
+            'Electrolyser efficiency (%)',
+            min_value=55.0, max_value=90.0,
+            value=_default_eff, step=0.5, format='%.1f%%',
+            key=_eff_key,
+            help=f'Default {selected_year}: {_default_eff:.1f}% (LHV)',
+        )
+        elec_eff = elec_eff_pct / 100.0
         transport_adj_pct = st.slider(
             'Transport cost adjustment (%)',
             min_value=-50, max_value=50,
