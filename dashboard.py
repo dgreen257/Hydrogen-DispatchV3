@@ -1894,7 +1894,7 @@ def main():
     dfs_with_gen = {}
     for cid, df_base in all_dfs.items():
         dfs_with_gen[cid] = compute_gen_costs(
-            df_base, selected_year, _elec_type, solar_capex, wind_capex, elec_capex
+            df_base, selected_year, _elec_type, solar_capex, wind_capex, elec_capex, elec_eff
         )
 
     # ── Apply transport adjustment + capacity filters ─────────────────────────
