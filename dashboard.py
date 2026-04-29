@@ -3,27 +3,23 @@ dashboard.py
 ------------
 Interactive Streamlit dashboard for the H2-Mapping corridor model.
 
-Reads pre-computed Results/corridor_A_{year}.csv … corridor_E_{year}.csv and
-renders interactive views:
-  1. Supply curve  — cumulative capacity vs cost, per corridor
-  2. Cost breakdown  — gen vs transport cost, median of within-cap points
-  3. Source maps  — scatter globe of supply locations coloured by cost / mode / source
-  4. Transport modes — pie chart + breakdown table
-  5. Country caps, Flow map, Assumptions, Strategic Dispatch, H₂ Projects Pipeline
+Reads pre-computed Results/corridor_X_base.csv files and renders:
+  1. Supply curve       — merit-order cumulative capacity vs cost, per corridor
+  2. Source maps        — scatter globe coloured by cost / mode / source
+  3. Country caps       — choropleth of export capacity by country
+  4. Flow map           — top-N source countries per corridor
+  5. Assumptions        — CAPEX trajectories, regional factors, WACC maps
+  6. Strategic Dispatch — multi-criteria weighted dispatch with radar KPIs
+  7. H₂ Projects Pipeline — IEA electrolysis project database
 
 Sidebar controls (no model re-run required):
-  - Year: auto-detected from available CSVs in Results/
-  - Corridor toggles
-  - Capacity limit toggle
-  - Annual demand (kt/yr) — dynamically recomputes within_cap
-  - Generation cost adjustment (%) — sensitivity analysis without re-running
-  - RED III threshold slider
-  - Map metric selector
+  - Scenario / year selector
+  - CAPEX sensitivity sliders (solar, wind, electrolyser, efficiency)
+  - Transport cost adjustment (%)
 
 Run
 ---
-    cd "h2-mapping-main"
-    /opt/anaconda3/envs/h2mapping/bin/streamlit run dashboard.py
+    streamlit run dashboard.py
 """
 
 import os
@@ -59,7 +55,7 @@ PORT_OPTIONS = {
 }
 
 from config import DEMAND_PROFILES, demand_for_year
-from corridors import CORRIDORS, EU_MEMBER_ISOS
+from corridors import CORRIDORS
 from plot_corridor import _build_flow_map_fig, _supply_curve_data, _build_optimal_mix
 # aggregate_country_supply inlined from run_corridors.py to avoid heavy dependencies
 def aggregate_country_supply(df: pd.DataFrame, caps: dict,
@@ -101,7 +97,7 @@ def aggregate_country_supply(df: pd.DataFrame, caps: dict,
 
     return result
 from generation_costs import global_capex
-from country_factors import SOLAR_CAPEX_FACTOR, WIND_CAPEX_FACTOR, WACC, WACC_COUNTRY_REN, WACC_COUNTRY_ELEC
+from country_factors import SOLAR_CAPEX_FACTOR, WIND_CAPEX_FACTOR, WACC_COUNTRY_REN, WACC_COUNTRY_ELEC
 from plotly.subplots import make_subplots
 
 GEO_LAYOUT = dict(
@@ -435,107 +431,6 @@ def fig_supply_curve(results_with_country: dict, h2_demand_kt: float,
     )
     return fig
 
-
-def fig_cost_breakdown(dfs_filtered: dict, show_corridors: list[str], n_countries: int = 5) -> go.Figure:
-    """Subplots: stacked bar of gen + transport cost for the cheapest N countries per corridor."""
-    active = [cid for cid in show_corridors
-              if dfs_filtered.get(cid) is not None and not dfs_filtered[cid].empty]
-    if not active:
-        return go.Figure().update_layout(title='No data')
-
-    fig = make_subplots(
-        rows=1, cols=len(active),
-        subplot_titles=[f'Corridor {cid}' for cid in active],
-        shared_yaxes=True,
-    )
-
-    showlegend = True
-    for i, cid in enumerate(active, 1):
-        df = dfs_filtered[cid]
-        valid = df.dropna(subset=['Total Cost per kg H2', 'Gen. cost per kg H2',
-                                  'Transport Cost per kg H2'])
-        if 'Country' not in valid.columns or valid.empty:
-            continue
-        ctry = (valid.groupby('Country')
-                     .agg(gen_cost=('Gen. cost per kg H2', 'mean'),
-                          trans_cost=('Transport Cost per kg H2', 'mean'),
-                          total_cost=('Total Cost per kg H2', 'mean'))
-                     .sort_values('total_cost')
-                     .head(n_countries)
-                     .reset_index())
-
-        fig.add_trace(go.Bar(
-            name='Generation', x=ctry['Country'], y=ctry['gen_cost'],
-            marker_color='#457B9D',
-            hovertemplate='%{x}<br>Generation: %{y:.2f} €/kg H₂<extra></extra>',
-            legendgroup='gen', showlegend=showlegend,
-        ), row=1, col=i)
-        fig.add_trace(go.Bar(
-            name='Transport', x=ctry['Country'], y=ctry['trans_cost'],
-            marker_color='#E63946',
-            hovertemplate='%{x}<br>Transport: %{y:.2f} €/kg H₂<extra></extra>',
-            legendgroup='trans', showlegend=showlegend,
-        ), row=1, col=i)
-        showlegend = False
-
-    fig.update_layout(
-        barmode='stack',
-        title=f'Cost Breakdown — Cheapest {n_countries} Countries per Corridor',
-        yaxis_title='Cost (€/kg H₂)',
-        legend=dict(orientation='h', yanchor='bottom', y=1.02),
-        plot_bgcolor='white',
-        height=450,
-    )
-    fig.update_xaxes(tickangle=90)
-    return fig
-
-
-def fig_emissions_breakdown(dfs_filtered: dict, show_corridors: list[str],
-                             red3_threshold: float) -> go.Figure:
-    """Stacked bar: median gen + transport emissions per corridor, with RED III line."""
-    labels, gen_emis, trans_emis = [], [], []
-
-    for cid in show_corridors:
-        df = dfs_filtered.get(cid)
-        if df is None or df.empty:
-            continue
-        valid = df.dropna(subset=['Gen. emissions per kg H2', 'Transport Emissions per kg H2'])
-        if valid.empty:
-            continue
-        labels.append(f'Corridor {cid}')
-        gen_emis.append(valid['Gen. emissions per kg H2'].median())
-        trans_emis.append(valid['Transport Emissions per kg H2'].median())
-
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        name='Generation', x=labels, y=gen_emis,
-        marker_color='#457B9D',
-        hovertemplate='Generation: %{y:.3f} kgCO₂eq/kgH₂<extra></extra>',
-    ))
-    fig.add_trace(go.Bar(
-        name='Transport', x=labels, y=trans_emis,
-        marker_color='#E63946',
-        hovertemplate='Transport: %{y:.3f} kgCO₂eq/kgH₂<extra></extra>',
-    ))
-
-    if labels:
-        fig.add_hline(
-            y=red3_threshold,
-            line_dash='dash',
-            line_color='black',
-            annotation_text=f'RED III threshold ({red3_threshold:.2f} kgCO₂eq/kgH₂)',
-            annotation_position='top right',
-        )
-
-    fig.update_layout(
-        barmode='stack',
-        title='Emissions Breakdown — Median of Within-Cap Points',
-        yaxis_title='Lifecycle Emissions (kgCO₂eq / kgH₂)',
-        legend=dict(orientation='h', yanchor='bottom', y=1.02),
-        plot_bgcolor='white',
-        height=400,
-    )
-    return fig
 
 
 def fig_source_map(dfs_filtered: dict, show_corridors: list[str],
@@ -1107,240 +1002,6 @@ def fig_strategic_source_map(
     return fig
 
 
-def _generate_strategic_pdf(
-    scenario: str,
-    year: int,
-    w_cost: int,
-    w_sec: int,
-    w_dep: int,
-    w_water: int,
-    ref_cost_grey: float,
-    ref_emiss_grey: float,
-    strat_cap_on: bool,
-    kpis: dict,
-    dispatch_df: pd.DataFrame,
-    demand_kt: float,
-    fig_radar: go.Figure,
-    fig_map: go.Figure,
-) -> bytes:
-    """Build a landscape A4 PDF report for the strategic dispatch tab."""
-    from io import BytesIO
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import cm
-    from reportlab.lib import colors
-    from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-        Image, HRFlowable, PageBreak,
-    )
-
-    buf = BytesIO()
-    page_w, _ = landscape(A4)
-    margin = 1.5 * cm
-    usable_w = page_w - 2 * margin
-
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=landscape(A4),
-        leftMargin=margin, rightMargin=margin,
-        topMargin=margin, bottomMargin=margin,
-    )
-
-    styles = getSampleStyleSheet()
-    style_title = ParagraphStyle(
-        'rpt_title', parent=styles['Heading1'],
-        fontSize=18, spaceAfter=4, textColor=colors.HexColor('#1a3a5c'),
-    )
-    style_h2 = ParagraphStyle(
-        'rpt_h2', parent=styles['Heading2'],
-        fontSize=11, spaceBefore=4, spaceAfter=3,
-        textColor=colors.HexColor('#1a3a5c'),
-    )
-    style_body = ParagraphStyle(
-        'rpt_body', parent=styles['Normal'], fontSize=9, spaceAfter=2,
-    )
-    style_small = ParagraphStyle(
-        'rpt_small', parent=styles['Normal'], fontSize=7.5,
-        textColor=colors.HexColor('#666666'),
-    )
-
-    story = []
-
-    # ── Title ──
-    story.append(Paragraph('Strategic Dispatch Report', style_title))
-    story.append(Paragraph(
-        f'Scenario: <b>{scenario}</b> &nbsp;&nbsp;|&nbsp;&nbsp; Year: <b>{year}</b>',
-        style_body,
-    ))
-    story.append(Spacer(1, 0.2 * cm))
-    story.append(HRFlowable(width='100%', thickness=1.5, color=colors.HexColor('#2A9D8F')))
-    story.append(Spacer(1, 0.25 * cm))
-
-    # ── Settings table ──
-    total_w = w_cost + w_sec + w_dep + w_water
-    def _norm(w):
-        return f'{100 * w / total_w:.0f}%' if total_w > 0 else '—'
-
-    settings_data = [
-        ['Weight', 'Raw / Normalised', 'Reference Parameter', 'Value'],
-        ['Cost',            f'{w_cost} ({_norm(w_cost)})',   'Grey H₂ cost',      f'{ref_cost_grey:.2f} €/kg'],
-        ['Security (CPI)',  f'{w_sec} ({_norm(w_sec)})',     'Grey H₂ emissions', f'{ref_emiss_grey:.1f} kgCO₂/kg'],
-        ['Diversification', f'{w_dep} ({_norm(w_dep)})',     'Capacity limits',   'On' if strat_cap_on else 'Off'],
-        ['Water Access',    f'{w_water} ({_norm(w_water)})', '',                  ''],
-    ]
-    s_tbl = Table(settings_data, colWidths=[4.0*cm, 4.2*cm, 5.2*cm, 4.0*cm])
-    s_tbl.setStyle(TableStyle([
-        ('BACKGROUND',     (0, 0), (-1, 0),  colors.HexColor('#1a3a5c')),
-        ('TEXTCOLOR',      (0, 0), (-1, 0),  colors.white),
-        ('FONTNAME',       (0, 0), (-1, 0),  'Helvetica-Bold'),
-        ('FONTSIZE',       (0, 0), (-1, -1), 8.5),
-        ('GRID',           (0, 0), (-1, -1), 0.4, colors.lightgrey),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f7f7f7')]),
-        ('FONTNAME',       (0, 1), (0, -1),  'Helvetica-Bold'),
-        ('FONTNAME',       (2, 1), (2, -1),  'Helvetica-Bold'),
-        ('VALIGN',         (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING',     (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING',  (0, 0), (-1, -1), 3),
-    ]))
-    story.append(s_tbl)
-    story.append(Spacer(1, 0.3 * cm))
-    story.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#cccccc')))
-    story.append(Spacer(1, 0.25 * cm))
-
-    # ── KPI metrics ──
-    story.append(Paragraph('Portfolio Performance', style_h2))
-
-    dc      = kpis.get('delivered_cost', np.nan)
-    sec_val = kpis.get('weighted_security', np.nan)
-    hhi_val = kpis.get('hhi', np.nan)
-    div_val = (1.0 - hhi_val) if pd.notna(hhi_val) else np.nan
-    bws_val = kpis.get('weighted_water', np.nan)
-    ca_val  = kpis.get('total_carbon_avoided', np.nan)  # kt CO₂
-    n_c     = kpis.get('n_countries', 0)
-    tot_alloc_kt = dispatch_df['allocated_kt'].sum() if not dispatch_df.empty else 0
-
-    kpi_headers = ['Delivered Cost', 'Security (CPI)', 'Diversification (1−HHI)', 'Water Stress (BWS)', 'Total Carbon Avoided']
-    kpi_values  = [
-        f'{dc:.3f} €/kg'              if pd.notna(dc)      else '—',
-        f'{sec_val:.0f} / 100'        if pd.notna(sec_val) else '—',
-        f'{div_val:.3f}'              if pd.notna(div_val) else '—',
-        f'{bws_val:.2f} / 5.0'        if pd.notna(bws_val) else '—',
-        f'{ca_val / 1000:.2f} Mt CO₂' if pd.notna(ca_val)  else 'N/A',
-    ]
-    kpi_cw  = usable_w / 5
-    kpi_tbl = Table([kpi_headers, kpi_values], colWidths=[kpi_cw] * 5)
-    kpi_tbl.setStyle(TableStyle([
-        ('BACKGROUND',     (0, 0), (-1, 0),  colors.HexColor('#2A9D8F')),
-        ('TEXTCOLOR',      (0, 0), (-1, 0),  colors.white),
-        ('FONTNAME',       (0, 0), (-1, 0),  'Helvetica-Bold'),
-        ('FONTSIZE',       (0, 0), (-1, 0),  8),
-        ('ALIGN',          (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME',       (0, 1), (-1, 1),  'Helvetica-Bold'),
-        ('FONTSIZE',       (0, 1), (-1, 1),  12),
-        ('GRID',           (0, 0), (-1, -1), 0.4, colors.lightgrey),
-        ('BACKGROUND',     (0, 1), (-1, 1),  colors.HexColor('#e8f7f5')),
-        ('VALIGN',         (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING',     (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING',  (0, 0), (-1, -1), 5),
-    ]))
-    story.append(kpi_tbl)
-    story.append(Spacer(1, 0.15 * cm))
-    story.append(Paragraph(
-        f'Sourcing from <b>{n_c} countries</b> &nbsp;·&nbsp; '
-        f'Allocated: <b>{tot_alloc_kt / 1000:.2f} Mt H₂/yr</b> &nbsp;·&nbsp; '
-        f'Demand: {demand_kt / 1000:.2f} Mt H₂/yr',
-        style_small,
-    ))
-    story.append(Spacer(1, 0.3 * cm))
-    story.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#cccccc')))
-    story.append(Spacer(1, 0.2 * cm))
-
-    # ── Charts (radar + map side by side) ──
-    chart_w = (usable_w - 0.4 * cm) / 2
-    chart_h = chart_w * 0.68
-
-    from io import BytesIO as _BytesIO
-    radar_img_bytes = fig_radar.to_image(format='png', width=700, height=480, scale=2)
-    map_img_bytes   = fig_map.to_image(format='png', width=700, height=480, scale=2)
-
-    chart_tbl = Table(
-        [[Image(_BytesIO(radar_img_bytes), width=chart_w, height=chart_h),
-          Image(_BytesIO(map_img_bytes),   width=chart_w, height=chart_h)]],
-        colWidths=[chart_w, chart_w],
-    )
-    chart_tbl.setStyle(TableStyle([
-        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING',   (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING',  (0, 0), (-1, -1), 0),
-        ('TOPPADDING',    (0, 0), (-1, -1), 0),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-        ('INNERGRID',     (0, 0), (-1, -1), 0, colors.white),
-        ('BOX',           (0, 0), (-1, -1), 0, colors.white),
-    ]))
-    story.append(chart_tbl)
-
-    # ── Dispatch detail table (second page) ──
-    if not dispatch_df.empty:
-        story.append(PageBreak())
-        story.append(Paragraph('Dispatch Detail', style_h2))
-        story.append(Paragraph(
-            f'Scenario: <b>{scenario}</b> &nbsp;|&nbsp; Year: <b>{year}</b>',
-            style_body,
-        ))
-        story.append(Spacer(1, 0.2 * cm))
-
-        _disp = dispatch_df.copy()
-        _disp['allocated_Mt'] = (_disp['allocated_kt'] / 1000).round(3)
-        _disp['pct_demand']   = (_disp['allocated_kt'] / demand_kt * 100).round(2)
-
-        col_order = {
-            'Country':              'Country',
-            'ISO_A3':               'ISO',
-            'corridor_id':          'Corridor',
-            'allocated_Mt':         'Alloc (Mt/yr)',
-            'pct_demand':           '% Demand',
-            'rep_cost_per_kg':      'Cost (€/kg)',
-            'rep_emissions_per_kg': 'Emissions (kg)',
-            'cpi_score':            'CPI',
-            'bws_score':            'BWS',
-        }
-        present  = [c for c in col_order if c in _disp.columns]
-        headers_d = [col_order[c] for c in present]
-
-        def _fmt(val):
-            if pd.isna(val): return '—'
-            if isinstance(val, float): return f'{val:.2f}'
-            return str(val)
-
-        rows_d = [[_fmt(row[c]) for c in present] for _, row in _disp.iterrows()]
-        cw_d   = usable_w / len(present)
-        d_tbl  = Table([headers_d] + rows_d, colWidths=[cw_d] * len(present), repeatRows=1)
-        d_tbl.setStyle(TableStyle([
-            ('BACKGROUND',     (0, 0), (-1, 0),  colors.HexColor('#1a3a5c')),
-            ('TEXTCOLOR',      (0, 0), (-1, 0),  colors.white),
-            ('FONTNAME',       (0, 0), (-1, 0),  'Helvetica-Bold'),
-            ('FONTSIZE',       (0, 0), (-1, -1), 8),
-            ('GRID',           (0, 0), (-1, -1), 0.3, colors.lightgrey),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
-            ('ALIGN',          (1, 0), (-1, -1), 'CENTER'),
-            ('VALIGN',         (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING',     (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING',  (0, 0), (-1, -1), 3),
-        ]))
-        story.append(d_tbl)
-
-    # ── Footer ──
-    story.append(Spacer(1, 0.4 * cm))
-    story.append(Paragraph(
-        f'Generated {pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")} · '
-        'Green Hydrogen EHB Corridor Analysis',
-        style_small,
-    ))
-
-    doc.build(story)
-    return buf.getvalue()
-
-
 # ---------------------------------------------------------------------------
 
 @st.cache_data(show_spinner='Loading capacity data…')
@@ -1414,39 +1075,6 @@ def fig_capacity_map(caps_df: pd.DataFrame, year: int) -> go.Figure:
             ticktext=tick_text,
         ),
     )
-    return fig
-
-
-def fig_transport_mode_pie(dfs_filtered: dict, show_corridors: list[str]) -> go.Figure:
-    """Pie chart: proportion of source locations using each transport mode."""
-    frames = []
-    for cid in show_corridors:
-        df = dfs_filtered.get(cid)
-        if df is not None and not df.empty:
-            frames.append(df)
-    if not frames:
-        return go.Figure()
-
-    combined = pd.concat(frames, ignore_index=True)
-    if 'Cheapest Medium' not in combined.columns:
-        return go.Figure()
-
-    counts = combined['Cheapest Medium'].value_counts()
-    colour_map = {
-        'NH3':    '#0072B2',
-        'LOHC':   '#E69F00',
-        'H2 Gas': '#009E73',
-        'H2 Liq': '#CC79A7',
-    }
-    colours = [colour_map.get(m, '#888') for m in counts.index]
-
-    fig = go.Figure(go.Pie(
-        labels=counts.index,
-        values=counts.values,
-        marker=dict(colors=colours),
-        hole=0.35,
-    ))
-    fig.update_layout(title='Transport Mode Share (within-cap source points)', height=350)
     return fig
 
 
@@ -1946,10 +1574,8 @@ def main():
         cols = st.columns(len(show_corridors))
         for col_st, (_, row) in zip(cols, summary_df.iterrows()):
             with col_st:
-                cid_label  = row['Corridor'].split(':')[0].strip()
-                half_cost  = row.get('Half-demand cost (€/kg)', np.nan)
-                cost_val   = half_cost if pd.notna(half_cost) else row.get('Median cost (€/kg)', np.nan)
-                label_text = 'Half-demand cost' if pd.notna(half_cost) else 'Median cost'
+                half_cost = row.get('Half-demand cost (€/kg)', np.nan)
+                cost_val  = half_cost if pd.notna(half_cost) else row.get('Median cost (€/kg)', np.nan)
                 st.metric(
                     label=row['Corridor'],
                     value=f"{cost_val:.2f} €/kg" if pd.notna(cost_val) else '—',

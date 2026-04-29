@@ -2,14 +2,7 @@
 config.py
 ---------
 Central parameter store for all model runs.
-
-Edit the values in the 'Run parameters' section below.
-Both main.py and run_corridors.py import from here — change once, applies everywhere.
 """
-
-# ---------------------------------------------------------------------------
-# Run parameters — edit these
-# ---------------------------------------------------------------------------
 
 scenario          = 'Current trajectory'   # 'Ambitious', 'Intermediate', 'Current trajectory'
 year              = 2040           # used by run_corridors.py; main.py uses run_years instead
@@ -21,12 +14,10 @@ max_pipeline_dist = 2000             # max pipeline distance [km]
 end_tuple         = (37.26, -6.94)    # destination [lat, lon] — used by main.py only (Rotterdam)
 
 # Years for multi-year main.py runs (transport costs computed once, gen costs loop over these)
-run_years         = list(range(2026, 2041))   # 2026 … 2040 inclusive
+run_years         = list(range(2026, 2041))
 
-# ---------------------------------------------------------------------------
+
 # Demand profiles [year → kt H₂/yr]
-# Source: EHB / IEA / EU Commission
-# ---------------------------------------------------------------------------
 
 DEMAND_PROFILES: dict = {
     'Ambitious': {
@@ -63,10 +54,6 @@ def demand_for_year(scenario: str, year: int) -> float:
             return profile[ya] + frac * (profile[yb] - profile[ya])
     return profile[years[-1]]
 
-
-# ---------------------------------------------------------------------------
-# Derived — do not edit
-# ---------------------------------------------------------------------------
 
 h2_demand = demand_for_year(scenario, year)
 

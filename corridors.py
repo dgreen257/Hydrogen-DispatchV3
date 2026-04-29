@@ -39,9 +39,7 @@ Usage
 """
 
 # ---------------------------------------------------------------------------
-# EU-27 member states (ISO_A3).  These are excluded from all import corridors
-# because the model covers non-EU imports only; domestic EU supply is handled
-# separately.
+# EU-27 member states (ISO_A3).
 # ---------------------------------------------------------------------------
 EU_MEMBER_ISOS: frozenset[str] = frozenset({
     'AUT', 'BEL', 'BGR', 'HRV', 'CYP', 'CZE', 'DNK', 'EST',
@@ -50,8 +48,8 @@ EU_MEMBER_ISOS: frozenset[str] = frozenset({
     'SVN', 'ESP', 'SWE',
 })
 
-# Country name equivalents — used as a fallback when ISO_A3 is '-99' or '---'
-# (Natural Earth 110m sometimes assigns -99 to coastal/border points).
+# Country name equivalents used as a fallback when ISO_A3 is -99 or ---
+# Natural Earth 110m sometimes assigns -99 to coastal/border points.
 EU_MEMBER_NAMES: frozenset[str] = frozenset({
     'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czechia',
     'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece',
