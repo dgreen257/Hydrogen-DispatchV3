@@ -226,7 +226,7 @@ def generation_costs(df_ren, h2_demand, year=2020, elec_type='alkaline',
     # Cap at a physically plausible maximum: 800 W/m² ≈ 11.4 m/s mean wind speed.
     # Values above this threshold are data artefacts in the source grid (e.g. some
     # coastal cells inherit anomalously high values from the underlying wind atlas).
-    WPD_CAP = 800.0
+    WPD_CAP = 640.0
     wpd_capped = df_ren['Wind Power Density'].clip(upper=WPD_CAP)
 
     capex_turbine = turbine_size * capex_wind * 1000                                                              # [EUR/turbine]
